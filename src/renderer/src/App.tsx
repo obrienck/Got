@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { GitBranch, Search, RefreshCw, FolderGit2, CheckCircle2, Clock } from 'lucide-react'
+import WelcomeScreen from './components/WelcomeScreen'
 
 const { gitAPI } = window as any
 
-export default function App() {
-  const [repoPath, setRepoPath] = useState<string>('/Users/chrisobrien/Documents/GitHub/Got')
-  const [searchInput, setSearchInput] = useState<string>(repoPath)
+export default function App(): React.JSX.Element {
+  const [repoPath, setRepoPath] = useState<string | null>(null)
+  const [searchInput, setSearchInput] = useState<string>('')
 
   const {
     data: status,
@@ -26,14 +27,27 @@ export default function App() {
     queryFn: () => gitAPI.log(repoPath)
   })
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent): void => {
     e.preventDefault()
-    setRepoPath(searchInput)
+    if (searchInput.trim()) {
+      setRepoPath(searchInput)
+    }
   }
 
-  const handleRefresh = () => {
+  const handleRefresh = (): void => {
     refetchStatus()
     refetchHistory()
+  }
+
+  if (repoPath === null) {
+    return (
+      <WelcomeScreen
+        onOpenRepo={(path) => {
+          setRepoPath(path)
+          setSearchInput(path)
+        }}
+      />
+    )
   }
 
   return (
@@ -87,7 +101,10 @@ export default function App() {
             onClick={handleRefresh}
             className="w-full flex items-center justify-center gap-2 bg-zinc-800/50 hover:bg-zinc-800 text-sm font-medium py-2 rounded-md transition-all active:scale-[0.98]"
           >
-            <RefreshCw size={14} className={(statusLoading || historyLoading) ? "animate-spin" : ""} />
+            <RefreshCw
+              size={14}
+              className={statusLoading || historyLoading ? 'animate-spin' : ''}
+            />
             Refresh
           </button>
         </div>
@@ -104,9 +121,14 @@ export default function App() {
             <div className="flex items-center gap-4 text-xs">
               <span className="flex items-center gap-1.5 text-zinc-400">
                 {status.modified.length > 0 ? (
-                  <><span className="w-2 h-2 rounded-full bg-amber-500" /> {status.modified.length} modified</>
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500" /> {status.modified.length}{' '}
+                    modified
+                  </>
                 ) : (
-                  <><CheckCircle2 size={14} className="text-emerald-500" /> Working tree clean</>
+                  <>
+                    <CheckCircle2 size={14} className="text-emerald-500" /> Working tree clean
+                  </>
                 )}
               </span>
             </div>
@@ -128,7 +150,9 @@ export default function App() {
                   <div className="flex-1 bg-zinc-900/30 hover:bg-zinc-800/40 border border-zinc-800/40 hover:border-zinc-700/50 rounded-lg p-3 transition-colors backdrop-blur-[2px]">
                     <div className="flex items-center justify-between mb-1">
                       <h3 className="text-sm font-medium text-zinc-200">{commit.message}</h3>
-                      <span className="text-xs font-mono text-zinc-500">{commit.hash.substring(0, 7)}</span>
+                      <span className="text-xs font-mono text-zinc-500">
+                        {commit.hash.substring(0, 7)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-zinc-500">
                       <span className="flex items-center gap-1.5">
@@ -139,7 +163,11 @@ export default function App() {
                       </span>
                       <span className="flex items-center gap-1 opacity-70">
                         <Clock size={12} />
-                        {new Date(commit.date).toLocaleDateString()} {new Date(commit.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(commit.date).toLocaleDateString()}{' '}
+                        {new Date(commit.date).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </span>
                     </div>
                   </div>

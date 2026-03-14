@@ -4,7 +4,12 @@
 
 @layer base {
   body {
-    @apply bg-zinc-950 text-slate-200 antialiased h-screen overflow-hidden selection:bg-indigo-500/30;
+    @apply bg-git-dark text-git-text antialiased h-screen overflow-hidden selection:bg-git-accent/30;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 
@@ -21,5 +26,23 @@
     background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #414868;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #565f89;
   }
 }

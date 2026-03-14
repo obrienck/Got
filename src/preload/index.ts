@@ -9,6 +9,8 @@ export const gitAPI = {
   log: (repoPath: string, options?: any) => ipcRenderer.invoke('git:log', repoPath, options),
   commit: (repoPath: string, message: string, files?: string[]) =>
     ipcRenderer.invoke('git:commit', repoPath, message, files),
+  pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
+  push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {
     ipcRenderer.on('git:progress', (_event, progress) => callback(progress))
   }

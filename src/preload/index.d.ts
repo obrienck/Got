@@ -8,6 +8,8 @@ declare global {
       status: (repoPath: string) => Promise<any>
       log: (repoPath: string, options?: any) => Promise<any>
       commit: (repoPath: string, message: string, files?: string[]) => Promise<any>
+      pull: (repoPath: string) => Promise<any>
+      push: (repoPath: string) => Promise<any>
       onProgress: (callback: (progress: any) => void) => void
     }
   }

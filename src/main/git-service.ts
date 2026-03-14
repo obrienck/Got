@@ -28,14 +28,22 @@ export class Repository {
     })
   }
 
-  async commit(message: string, files?: string[]) {
+  async commit(message: string, files?: string[]): Promise<any> {
     if (files && files.length > 0) {
       await this.git.add(files)
     }
     return this.git.commit(message)
   }
 
-  async clone(url: string, targetPath: string, onProgress: (progress: any) => void) {
+  async pull(): Promise<any> {
+    return this.git.pull()
+  }
+
+  async push(): Promise<any> {
+    return this.git.push()
+  }
+
+  async clone(url: string, targetPath: string, onProgress: (progress: any) => void): Promise<any> {
     return simpleGit().clone(url, targetPath, ['--progress'], onProgress)
   }
 }

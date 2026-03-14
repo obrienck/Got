@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { repoManager } from './repo-manager'
 
-export function setupIpcHandlers() {
+export function setupIpcHandlers(): void {
   ipcMain.handle('git:status', async (_, repoPath: string) => {
     return repoManager.getRepo(repoPath).status()
   })
@@ -14,7 +14,15 @@ export function setupIpcHandlers() {
     return repoManager.getRepo(repoPath).commit(message, files)
   })
 
-  ipcMain.on('git:progress-start', (_event, _repoPath) => {
+  ipcMain.handle('git:pull', async (_, repoPath: string) => {
+    return repoManager.getRepo(repoPath).pull()
+  })
+
+  ipcMain.handle('git:push', async (_, repoPath: string) => {
+    return repoManager.getRepo(repoPath).push()
+  })
+
+  ipcMain.on('git:progress-start', () => {
     // Placeholder for stream responses
   })
 }

@@ -7,8 +7,8 @@ import icon from '../../resources/icon.png?asset'
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1280,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -34,6 +34,9 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  // Setup custom IPC handlers for git (pass mainWindow for dialog parent)
+  setupIpcHandlers(mainWindow)
 }
 
 // This method will be called when Electron has finished
@@ -49,9 +52,6 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
-
-  // Setup custom IPC handlers for git
-  setupIpcHandlers()
 
   createWindow()
 

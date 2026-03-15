@@ -1,3 +1,6 @@
+// src/preload/index.ts
+// Exposes a secure gitAPI to the renderer via contextBridge
+
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
@@ -5,10 +8,21 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {}
 
 export const gitAPI = {
+  // --- Repository selection & persistence ---
+  selectRepository: () => ipcRenderer.invoke('git:selectRepository'),
+  getRecentRepos: () => ipcRenderer.invoke('git:getRecentRepos'),
+  getLastRepoPath: () => ipcRenderer.invoke('git:getLastRepoPath'),
+
+  // --- Git operations ---
   status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
   log: (repoPath: string, options?: any) => ipcRenderer.invoke('git:log', repoPath, options),
+  stage: (repoPath: string, files: string[]) => ipcRenderer.invoke('git:stage', repoPath, files),
+  unstage: (repoPath: string, files: string[]) =>
+    ipcRenderer.invoke('git:unstage', repoPath, files),
   commit: (repoPath: string, message: string, files?: string[]) =>
     ipcRenderer.invoke('git:commit', repoPath, message, files),
+  checkout: (repoPath: string, branch: string) =>
+    ipcRenderer.invoke('git:checkout', repoPath, branch),
   pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {

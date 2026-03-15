@@ -43,6 +43,18 @@ export class Repository {
     return this.git.push()
   }
 
+  async stage(files: string[]): Promise<any> {
+    return this.git.add(files)
+  }
+
+  async unstage(files: string[]): Promise<any> {
+    return this.git.reset(['HEAD', '--', ...files])
+  }
+
+  async checkout(branch: string): Promise<any> {
+    return this.git.checkout(branch)
+  }
+
   async clone(url: string, targetPath: string, onProgress: (progress: any) => void): Promise<any> {
     return simpleGit().clone(url, targetPath, ['--progress'], onProgress)
   }

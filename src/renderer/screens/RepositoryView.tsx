@@ -15,13 +15,11 @@ import {
   FileText,
   FileCode,
   FolderOpen,
-  Terminal,
   Check,
-  Search,
-  MoreVertical,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useRepoContext } from '../src/context/RepoContext';
 
 // --- Utils & Types ---
 
@@ -43,14 +41,13 @@ declare global {
       onProgress: (callback: (progress: any) => void) => void;
       pull?: (repoPath: string) => Promise<any>;
       push?: (repoPath: string) => Promise<any>;
+      selectRepository: () => Promise<string | null>;
+      getRecentRepos: () => Promise<string[]>;
+      getLastRepoPath: () => Promise<string | null>;
     };
   }
 }
 
-// Mocking useRepoContext for this file as requested
-const useRepoContext = () => {
-  return { currentRepoPath: '/mock/path/to/repo' };
-};
 
 // --- Inline UI Components (shadcn-like) ---
 
@@ -118,6 +115,7 @@ function useGitStatus(repoPath: string) {
   return useQuery({
     queryKey: ['git-status', repoPath],
     queryFn: async () => {
+      if (!repoPath) return {};
       if (window.gitAPI?.status) return window.gitAPI.status(repoPath);
       // Fallback mock data if API not fully available
       return {
@@ -135,6 +133,7 @@ function useCommitGraph(repoPath: string) {
   return useQuery({
     queryKey: ['git-log', repoPath],
     queryFn: async () => {
+      if (!repoPath) return { all: [] };
       if (window.gitAPI?.log) return window.gitAPI.log(repoPath, { '--all': true, '--graph': true, '--pretty': 'format:%h|%s|%an|%ad' });
       
       // Mock log data matching the mockup lines if window.gitAPI is not available
@@ -166,8 +165,8 @@ export default function RepositoryView() {
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null);
 
   // Queries
-  const { data: statusData, isLoading: isLoadingStatus } = useGitStatus(currentRepoPath);
-  const { data: logData, isLoading: isLoadingLog } = useCommitGraph(currentRepoPath);
+  const { data: statusData } = useGitStatus(currentRepoPath as string);
+  const { data: logData, isLoading: isLoadingLog } = useCommitGraph(currentRepoPath as string);
 
   // Mutations
   const invalidateQueries = () => {
@@ -177,6 +176,7 @@ export default function RepositoryView() {
 
   const commitMutation = useMutation({
     mutationFn: async ({ sum, desc }: { sum: string; desc: string }) => {
+      if (!currentRepoPath) return;
       if (window.gitAPI?.commit) {
         // Assume unstaged changes are committed or we manage them elsewhere
         return window.gitAPI.commit(currentRepoPath, sum + '\n\n' + desc);
@@ -192,6 +192,7 @@ export default function RepositoryView() {
 
   const checkoutMutation = useMutation({
     mutationFn: async (branch: string) => {
+      if (!currentRepoPath) return;
       if (window.gitAPI?.checkout) return window.gitAPI.checkout(currentRepoPath, branch);
       return new Promise(resolve => setTimeout(resolve, 300));
     },
@@ -225,37 +226,37 @@ export default function RepositoryView() {
   const filesUnstaged = statusData?.modified || ['package.json', 'README.md', 'tailwind.config.js'];
 
   return (
-    <div className="dark flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans selection:bg-indigo-500/30">
+    <div className="dark flex h-screen w-full flex-col bg-git-dark text-git-text font-sans selection:bg-brand-primary/30">
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #414868; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #565f89; }
       `}</style>
       
       {/* Top Bar */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#2d2d35] bg-[#1a1a1f] px-4 shadow-sm z-10">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-git-border bg-git-panel px-4 shadow-sm z-10">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors">
             <span className="text-indigo-400">{'</>'}</span>
             Got
           </div>
-          <div className="flex items-center gap-1.5 border-l border-[#33333d] pl-6">
+          <div className="flex items-center gap-1.5 border-l border-git-border pl-6">
             <Button variant="ghost" size="sm" className="gap-2 px-2.5 hover:bg-slate-800">
               <ArrowDownToLine className="h-4 w-4" /> Pull
             </Button>
             <Button variant="ghost" size="sm" className="gap-2 px-2.5 hover:bg-slate-800">
               <ArrowUpToLine className="h-4 w-4" /> Push
             </Button>
-            <Button size="sm" className="ml-2 gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-medium border-0 px-3">
+            <Button size="sm" className="ml-2 gap-1.5 bg-brand-primary hover:bg-brand-primary/90 text-white font-medium border-0 px-3">
               <GitPullRequest className="h-4 w-4" /> Branch
             </Button>
           </div>
         </div>
         
         <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-2 rounded-full border border-[#33333d] bg-[#0f0f12] px-3 py-1 text-xs">
-            <GitPullRequest className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="flex items-center gap-2 rounded-full border border-git-border bg-git-dark px-3 py-1 text-xs">
+            <GitPullRequest className="h-3.5 w-3.5 text-brand-primary" />
             <span className="font-semibold text-white">main</span>
             <span className="text-slate-500">•</span>
             <span className="text-slate-400">origin/main</span>
@@ -270,7 +271,7 @@ export default function RepositoryView() {
       <div className="flex flex-1 overflow-hidden">
         
         {/* Left Sidebar */}
-        <div className="flex w-[280px] shrink-0 flex-col border-r border-[#2d2d35] bg-[#1a1a1f]">
+        <div className="flex w-[260px] lg:w-[280px] shrink-0 flex-col border-r border-git-border bg-git-panel">
           <div className="flex h-10 items-center justify-between px-4">
             <h2 className="text-[11px] font-bold tracking-wider text-slate-500">REPOSITORY</h2>
             <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-white">
@@ -284,11 +285,11 @@ export default function RepositoryView() {
               <div>
                 <button onClick={() => toggleFolder('src')} className="flex w-full items-center gap-1.5 rounded bg-white/5 py-1 px-2 text-sm text-slate-200">
                   <ChevronDown className="h-3.5 w-3.5" />
-                  <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
+                  <FolderOpen className="h-3.5 w-3.5 text-brand-primary" />
                   src/
                 </button>
                 {expandedFolders.src && (
-                  <div className="ml-5 flex flex-col gap-0.5 border-l border-[#33333d] pl-1.5 mt-0.5">
+                  <div className="ml-5 flex flex-col gap-0.5 border-l border-git-border pl-1.5 mt-0.5">
                     <div className="flex items-center gap-2 rounded py-1 px-2 text-[13px] text-slate-400 hover:bg-white/5 cursor-pointer">
                       <FileCode className="h-3.5 w-3.5 text-cyan-400/80" /> App.tsx
                     </div>
@@ -330,14 +331,14 @@ export default function RepositoryView() {
                     onClick={() => checkoutMutation.mutate(branch.name)}
                     className={cn(
                       "group flex items-center justify-between rounded px-2 py-1.5 text-sm transition-colors",
-                      branch.active ? "bg-indigo-500/10 text-indigo-300 font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                      branch.active ? "bg-brand-primary/10 text-brand-primary font-medium" : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
                     )}
                   >
                     <div className="flex items-center gap-2 truncate">
                       <GitPullRequest className={cn("h-3.5 w-3.5 shrink-0", branch.color)} />
                       <span className="truncate">{branch.name}</span>
                     </div>
-                    {branch.active && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-400" />}
+                    {branch.active && <Check className="h-3.5 w-3.5 shrink-0 text-brand-primary" />}
                   </button>
                 ))}
               </div>
@@ -346,9 +347,9 @@ export default function RepositoryView() {
         </div>
 
         {/* Center Main Area */}
-        <div className="flex flex-1 flex-col overflow-hidden bg-[#0f0f12]">
+        <div className="flex flex-1 flex-col min-w-0 overflow-hidden bg-git-dark">
           {/* Tabs */}
-          <div className="flex h-12 w-full shrink-0 border-b border-[#2d2d35] px-4 font-medium text-sm z-10">
+          <div className="flex h-12 w-full shrink-0 border-b border-git-border px-4 font-medium text-sm z-10">
             {['Graph', 'Files', 'Blame'].map(tab => (
               <button
                 key={tab}
@@ -360,7 +361,7 @@ export default function RepositoryView() {
               >
                 {tab}
                 {activeTab === tab && (
-                  <div className="absolute bottom-0 left-0 h-[2px] w-full bg-indigo-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-0 h-[2px] w-full bg-brand-primary rounded-t-full" />
                 )}
               </button>
             ))}
@@ -375,7 +376,7 @@ export default function RepositoryView() {
             ) : (
               <ScrollArea className="h-full">
                 <table className="w-full text-left text-[13px] border-collapse">
-                  <thead className="sticky top-0 z-10 bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35]">
+                  <thead className="sticky top-0 z-10 bg-git-dark/95 backdrop-blur shadow-[0_1px_0_var(--tw-colors-git-border,#414868)]">
                     <tr>
                       <th className="w-[120px] px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">GRAPH</th>
                       <th className="px-4 py-2 font-semibold text-slate-400">MESSAGE</th>
@@ -395,16 +396,16 @@ export default function RepositoryView() {
                           onClick={() => setSelectedCommit(commit.hash)}
                           className={cn(
                             "group cursor-pointer transition-colors",
-                            isSelected ? "bg-indigo-500/10" : "hover:bg-white/[0.02]"
+                            isSelected ? "bg-brand-primary/10" : "hover:bg-white/[0.02]"
                           )}
                         >
                           <td className="px-4 py-1 relative">
                             <div className="flex justify-center h-8 items-center w-full relative">
                               {/* Central continuous line mock */}
-                              <div className="absolute top-0 bottom-0 w-0.5 bg-[#2d2d35] left-1/2 -ml-[1px]" />
+                              <div className="absolute top-0 bottom-0 w-0.5 bg-git-border left-1/2 -ml-[1px]" />
                               {/* Commit dot */}
                               <div 
-                                className={cn("z-10 h-3 w-3 rounded-full border-[2.5px] border-[#0f0f12] ring-1 ring-offset-0", 
+                                className={cn("z-10 h-3 w-3 rounded-full border-[2.5px] border-git-dark ring-1 ring-offset-0", 
                                   isSelected ? "scale-125 ring-white" : "ring-transparent hover:scale-110 transition-transform"
                                 )}
                                 style={{ backgroundColor: color }}
@@ -426,9 +427,9 @@ export default function RepositoryView() {
                             <div className="flex items-center gap-2">
                               {commit.refs && (
                                 <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-sans font-bold", 
-                                  commit.refs.includes('main') ? "bg-purple-500/20 text-purple-300" :
-                                  commit.refs.includes('feature') ? "bg-cyan-500/20 text-cyan-300" :
-                                  "bg-rose-500/20 text-rose-300"
+                                  commit.refs.includes('main') ? "bg-git-commit-main/20 text-git-commit-main" :
+                                  commit.refs.includes('feature') ? "bg-git-commit-feature/20 text-git-commit-feature" :
+                                  "bg-git-commit-hotfix/20 text-git-commit-hotfix"
                                 )}>
                                   {commit.refs.replace('HEAD -> ', '')}
                                 </span>
@@ -436,9 +437,9 @@ export default function RepositoryView() {
                               <span className={isSelected ? "text-white" : ""}>{commit.message}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-slate-400 capitalize whitespace-nowrap">{commit.author_name}</td>
-                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">{commit.date}</td>
-                          <td className="pl-4 pr-6 py-2 text-slate-500 text-right w-[80px]">
+                          <td className="px-4 py-2 text-git-text capitalize whitespace-nowrap">{commit.author_name}</td>
+                          <td className="px-4 py-2 text-git-text whitespace-nowrap">{commit.date}</td>
+                          <td className="pl-4 pr-6 py-2 text-git-text/70 text-right w-[80px]">
                             {commit.hash.substring(0, 7)}
                           </td>
                         </tr>
@@ -452,7 +453,7 @@ export default function RepositoryView() {
         </div>
 
         {/* Right Panel - Commit Info */}
-        <div className="flex w-[320px] shrink-0 flex-col border-l border-[#2d2d35] bg-[#1a1a1f] shadow-xl z-20">
+        <div className="flex w-[280px] lg:w-[320px] shrink-0 flex-col border-l border-git-border bg-git-panel shadow-xl z-20">
           <ScrollArea className="flex-1 p-4 pb-0">
             {/* Staged Section */}
             <div className="mb-6">
@@ -462,7 +463,7 @@ export default function RepositoryView() {
               <div className="flex flex-col gap-1">
                 {filesStaged.map((f: string, i: number) => (
                   <div key={i} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-white/5 transition-colors cursor-pointer text-slate-300">
-                    <Checkbox className="data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500" checked onChange={() => {}} />
+                    <Checkbox className="data-[state=checked]:bg-brand-primary data-[state=checked]:border-brand-primary" checked onChange={() => {}} />
                     <span className="flex h-5 w-5 items-center justify-center rounded bg-purple-500/10 text-[11px] font-bold text-purple-400">M</span>
                     <span className="flex-1 truncate group-hover:text-white">{f}</span>
                   </div>
@@ -499,44 +500,48 @@ export default function RepositoryView() {
           </ScrollArea>
 
           {/* Commit Area */}
-          <div className="flex flex-col gap-3 p-4 border-t border-[#2d2d35] bg-[#1a1a1f] shrink-0">
-            <h3 className="text-xs font-bold tracking-wider text-slate-400">COMMIT MESSAGE</h3>
-            <div className="flex flex-col gap-2 relative">
-              <Input
-                ref={summaryRef}
-                value={summary}
-                onChange={e => setSummary(e.target.value)}
-                placeholder="Commit summary (Cmd+K)"
-                className="bg-[#0f0f12] border-[#33333d] focus-visible:ring-indigo-500 text-[13px]"
-              />
-              <Textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Description (optional)"
-                className="bg-[#0f0f12] border-[#33333d] resize-none h-24 focus-visible:ring-indigo-500 text-[13px]"
-              />
+          <div className="flex flex-col p-4 border-t border-git-border bg-git-panel shrink-0">
+            <div className="flex flex-col gap-3 mb-4">
+              <h3 className="text-xs font-bold tracking-wider text-slate-400">COMMIT MESSAGE</h3>
+              <div className="flex flex-col gap-2 relative">
+                <Input
+                  ref={summaryRef}
+                  value={summary}
+                  onChange={e => setSummary(e.target.value)}
+                  placeholder="Commit summary (Cmd+K)"
+                  className="bg-git-dark border-git-border focus-visible:ring-brand-primary text-[13px]"
+                />
+                <Textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="bg-git-dark border-git-border resize-none h-24 focus-visible:ring-brand-primary text-[13px]"
+                />
+              </div>
+              <Button 
+                className="w-full h-10 gap-2 font-medium bg-brand-primary hover:bg-brand-primary/90 text-white" 
+                disabled={!summary.trim() || commitMutation.isPending}
+                onClick={() => commitMutation.mutate({ sum: summary, desc: description })}
+              >
+                {commitMutation.isPending ? 'Committing...' : `Commit ${filesStaged.length} Files`}
+              </Button>
             </div>
-            <Button 
-              className="w-full h-10 gap-2 font-medium" 
-              disabled={!summary.trim() || commitMutation.isPending}
-              onClick={() => commitMutation.mutate({ sum: summary, desc: description })}
-            >
-              {commitMutation.isPending ? 'Committing...' : `Commit ${filesStaged.length} Files`}
-            </Button>
+
+            {/* Bottom Right Avatar positioned statically inside right panel */}
+            <div className="mt-2 flex items-center justify-between border-t border-git-border pt-4">
+              <div className="flex items-center gap-2">
+                <div className="flex bg-indigo-500 text-white rounded-full h-7 w-7 items-center justify-center text-[10px] font-bold tracking-wide shadow-inner">
+                  AD
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold text-slate-200 leading-tight">Alex Developer</span>
+                  <span className="text-[10px] text-slate-400 leading-tight">alex@example.com</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-      </div>
-
-      {/* Bottom Right avatar & info is absolute to overlay or sit at bottom of right panel */}
-      <div className="absolute bottom-3 right-[336px] items-center gap-2 hidden lg:flex bg-[#1a1a1f]/80 backdrop-blur border border-[#33333d] px-3 py-1.5 rounded-full shadow-lg">
-        <div className="flex bg-indigo-500 text-white rounded-full h-6 w-6 items-center justify-center text-[10px] font-bold tracking-wide shadow-inner">
-          AD
-        </div>
-        <div className="flex flex-col">
-          <span className="text-[11px] font-bold text-slate-200 leading-tight">Alex Developer</span>
-          <span className="text-[10px] text-slate-400 leading-tight">alex@example.com</span>
-        </div>
       </div>
     </div>
   );

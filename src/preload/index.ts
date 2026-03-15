@@ -13,7 +13,10 @@ export const gitAPI = {
   push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {
     ipcRenderer.on('git:progress', (_event, progress) => callback(progress))
-  }
+  },
+  selectRepository: () => ipcRenderer.invoke('git:selectRepository'),
+  getRecentRepos: () => ipcRenderer.invoke('git:getRecentRepos'),
+  getLastRepoPath: () => ipcRenderer.invoke('git:getLastRepoPath')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

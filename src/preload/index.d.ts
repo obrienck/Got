@@ -34,6 +34,7 @@ declare global {
       ) => Promise<
         Array<{ name: string; path: string; isDirectory: boolean; isIgnored: boolean }>
       >
+      getFileBlame: (repoPath: string, filePath: string) => Promise<string>
       pull: (repoPath: string) => Promise<any>
       push: (repoPath: string) => Promise<any>
       onProgress: (callback: (progress: any) => void) => void

@@ -19,7 +19,11 @@ import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 import { getStatusInfo } from '../src/lib/file-status'
+import { parseDiff } from '../src/lib/diff-parser'
+import { parseBlame } from '../src/lib/blame-parser'
 import FileTree from '../src/components/FileTree'
+import DiffView from '../src/components/DiffView'
+import BlameView from '../src/components/BlameView'
 import BranchManagerScreen from './BranchManagerScreen'
 import CommitDetailScreen from './CommitDetailScreen'
 import gotLogo from '../src/assets/got-logo-transparent.png'
@@ -105,13 +109,9 @@ const Checkbox = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HT
 )
 Checkbox.displayName = 'Checkbox'
 
-const ScrollArea = ({
-  children,
-  className
-}: {
-  children: React.ReactNode
-  className?: string
-}) => <div className={cn('overflow-y-auto overflow-x-hidden', className)}>{children}</div>
+const ScrollArea = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn('overflow-y-auto overflow-x-hidden', className)}>{children}</div>
+)
 
 // --- Graph color cycling ---
 
@@ -156,24 +156,19 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   const [description, setDescription] = useState('')
   const [activeTab, setActiveTab] = useState('Graph')
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [viewingCommitHash, setViewingCommitHash] = useState<string | null>(null)
   const [showBranchManager, setShowBranchManager] = useState(false)
 
   // --- TanStack Queries (REAL data from window.gitAPI) ---
 
-  const {
-    data: statusData,
-    isLoading: isLoadingStatus
-  } = useQuery({
+  const { data: statusData, isLoading: isLoadingStatus } = useQuery({
     queryKey: ['status', repoPath],
     queryFn: () => window.gitAPI.status(repoPath),
     refetchInterval: 5000 // Auto-refresh status every 5s
   })
 
-  const {
-    data: logData,
-    isLoading: isLoadingLog
-  } = useQuery({
+  const { data: logData, isLoading: isLoadingLog } = useQuery({
     queryKey: ['log', repoPath],
     queryFn: () => window.gitAPI.log(repoPath, { '--all': true })
   })
@@ -187,6 +182,26 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
     queryKey: ['branchesLocal', repoPath],
     queryFn: () => window.gitAPI.branchesLocal(repoPath)
   })
+
+  // --- Files tab: diff for whichever commit is selected in the Graph tab ---
+
+  const { data: filesTabRawDiff, isLoading: isLoadingFilesTabDiff } = useQuery({
+    queryKey: ['commitDiff', repoPath, selectedCommit],
+    queryFn: () => window.gitAPI.getCommitDiff(repoPath, selectedCommit as string),
+    enabled: activeTab === 'Files' && !!selectedCommit
+  })
+
+  const filesTabDiff = useMemo(() => parseDiff(filesTabRawDiff || ''), [filesTabRawDiff])
+
+  // --- Blame tab: blame for whichever file is selected in the sidebar tree ---
+
+  const { data: rawBlame, isLoading: isLoadingBlame } = useQuery({
+    queryKey: ['fileBlame', repoPath, selectedFilePath],
+    queryFn: () => window.gitAPI.getFileBlame(repoPath, selectedFilePath as string),
+    enabled: activeTab === 'Blame' && !!selectedFilePath
+  })
+
+  const blameLines = useMemo(() => parseBlame(rawBlame || ''), [rawBlame])
 
   // --- Ancestry-aware commit graph layout ---
 
@@ -285,19 +300,15 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
 
   // Unstaged = files with working_dir changes
   const unstagedFiles =
-    statusData?.files?.filter(
-      (f: any) => f.working_dir !== ' ' && f.working_dir !== '?'
-    ) || []
+    statusData?.files?.filter((f: any) => f.working_dir !== ' ' && f.working_dir !== '?') || []
 
   // Not-tracked files
-  const untrackedFiles =
-    statusData?.files?.filter((f: any) => f.working_dir === '?') || []
+  const untrackedFiles = statusData?.files?.filter((f: any) => f.working_dir === '?') || []
 
   // Staged files
   const stagedFiles =
-    statusData?.files?.filter(
-      (f: any) => f.index !== ' ' && f.index !== '?' && f.index !== '!'
-    ) || []
+    statusData?.files?.filter((f: any) => f.index !== ' ' && f.index !== '?' && f.index !== '!') ||
+    []
 
   const allUnstaged = [...unstagedFiles, ...untrackedFiles]
 
@@ -440,7 +451,12 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
           <ScrollArea className="flex-1 px-2 pb-4">
             {/* File Tree — real recursive directory browser, lazily loaded */}
             <div className="mt-1">
-              <FileTree repoPath={repoPath} statusByPath={statusByPath} />
+              <FileTree
+                repoPath={repoPath}
+                statusByPath={statusByPath}
+                onFileClick={setSelectedFilePath}
+                selectedFilePath={selectedFilePath}
+              />
             </div>
 
             {/* Local Branches */}
@@ -467,10 +483,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                       )}
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <GitPullRequest
-                          className="h-3.5 w-3.5 shrink-0"
-                          style={{ color }}
-                        />
+                        <GitPullRequest className="h-3.5 w-3.5 shrink-0" style={{ color }} />
                         <span className="truncate">{branch}</span>
                       </div>
                       {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-400" />}
@@ -503,138 +516,163 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             ))}
           </div>
 
-          {/* Graph Content */}
+          {/* Tab Content */}
           <div className="flex-1 overflow-hidden relative">
-            {isLoadingLog ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
-                  <span className="text-sm text-slate-500">Loading commit history...</span>
-                </div>
-              </div>
-            ) : (
-              <ScrollArea className="h-full">
-                {/* Column header */}
-                <div className="sticky top-0 z-10 flex bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35] text-left text-[13px]">
-                  <div
-                    style={{ width: graphWidth }}
-                    className="shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap"
-                  >
-                    GRAPH
-                  </div>
-                  <div className="flex-1 px-4 py-2 font-semibold text-slate-400">MESSAGE</div>
-                  <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
-                    AUTHOR
-                  </div>
-                  <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
-                    DATE
-                  </div>
-                  <div className="w-[80px] shrink-0 pl-4 pr-6 py-2 font-semibold text-slate-400 whitespace-nowrap text-right">
-                    SHA
+            {activeTab === 'Graph' &&
+              (isLoadingLog ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                    <span className="text-sm text-slate-500">Loading commit history...</span>
                   </div>
                 </div>
+              ) : (
+                <ScrollArea className="h-full">
+                  {/* Column header */}
+                  <div className="sticky top-0 z-10 flex bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35] text-left text-[13px]">
+                    <div
+                      style={{ width: graphWidth }}
+                      className="shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap"
+                    >
+                      GRAPH
+                    </div>
+                    <div className="flex-1 px-4 py-2 font-semibold text-slate-400">MESSAGE</div>
+                    <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                      AUTHOR
+                    </div>
+                    <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                      DATE
+                    </div>
+                    <div className="w-[80px] shrink-0 pl-4 pr-6 py-2 font-semibold text-slate-400 whitespace-nowrap text-right">
+                      SHA
+                    </div>
+                  </div>
 
-                {/* Rows, with the ancestry graph rendered as one SVG overlay behind them */}
-                <div className="relative font-mono tracking-tight text-[13px]">
-                  <svg
-                    width={graphWidth}
-                    height={graphCommits.length * ROW_HEIGHT}
-                    className="absolute top-0 left-0 pointer-events-none"
-                  >
-                    {graphLayout.edges.map((e, i) => (
-                      <path
-                        key={i}
-                        d={edgePath(
-                          laneX(e.fromCol),
-                          edgeY(e.row, e.fromEdge),
-                          laneX(e.toCol),
-                          edgeY(e.row, e.toEdge)
-                        )}
-                        stroke={e.color}
-                        strokeWidth={2}
-                        fill="none"
-                      />
-                    ))}
-                    {graphLayout.nodes.map((n) => {
-                      const commit = logData?.all?.[n.row]
-                      const isSelected = !!commit && selectedCommit === commit.hash
-                      return (
-                        <circle
-                          key={n.row}
-                          cx={laneX(n.col)}
-                          cy={edgeY(n.row, 'center')}
-                          r={isSelected ? 5.5 : 4}
-                          fill={n.color}
-                          stroke="#0f0f12"
-                          strokeWidth={2.5}
+                  {/* Rows, with the ancestry graph rendered as one SVG overlay behind them */}
+                  <div className="relative font-mono tracking-tight text-[13px]">
+                    <svg
+                      width={graphWidth}
+                      height={graphCommits.length * ROW_HEIGHT}
+                      className="absolute top-0 left-0 pointer-events-none"
+                    >
+                      {graphLayout.edges.map((e, i) => (
+                        <path
+                          key={i}
+                          d={edgePath(
+                            laneX(e.fromCol),
+                            edgeY(e.row, e.fromEdge),
+                            laneX(e.toCol),
+                            edgeY(e.row, e.toEdge)
+                          )}
+                          stroke={e.color}
+                          strokeWidth={2}
+                          fill="none"
                         />
-                      )
-                    })}
-                  </svg>
+                      ))}
+                      {graphLayout.nodes.map((n) => {
+                        const commit = logData?.all?.[n.row]
+                        const isSelected = !!commit && selectedCommit === commit.hash
+                        return (
+                          <circle
+                            key={n.row}
+                            cx={laneX(n.col)}
+                            cy={edgeY(n.row, 'center')}
+                            r={isSelected ? 5.5 : 4}
+                            fill={n.color}
+                            stroke="#0f0f12"
+                            strokeWidth={2.5}
+                          />
+                        )
+                      })}
+                    </svg>
 
-                  {logData?.all?.map((commit: any) => {
-                    const isSelected = selectedCommit === commit.hash
-                    const commitDate = commit.date
-                      ? new Date(commit.date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : ''
+                    {logData?.all?.map((commit: any) => {
+                      const isSelected = selectedCommit === commit.hash
+                      const commitDate = commit.date
+                        ? new Date(commit.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : ''
 
-                    return (
-                      <div
-                        key={commit.hash}
-                        onClick={() => setSelectedCommit(commit.hash)}
-                        onDoubleClick={() => setViewingCommitHash(commit.hash)}
-                        title="Double-click to view commit details"
-                        style={{ height: ROW_HEIGHT }}
-                        className={cn(
-                          'group flex items-center cursor-pointer transition-colors border-b border-[#1e1e24]',
-                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/[0.02]'
-                        )}
-                      >
-                        <div style={{ width: graphWidth }} className="shrink-0 h-full" />
-                        <div className="flex-1 min-w-0 px-4 text-slate-200">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {commit.refs && (
+                      return (
+                        <div
+                          key={commit.hash}
+                          onClick={() => setSelectedCommit(commit.hash)}
+                          onDoubleClick={() => setViewingCommitHash(commit.hash)}
+                          title="Double-click to view commit details"
+                          style={{ height: ROW_HEIGHT }}
+                          className={cn(
+                            'group flex items-center cursor-pointer transition-colors border-b border-[#1e1e24]',
+                            isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/[0.02]'
+                          )}
+                        >
+                          <div style={{ width: graphWidth }} className="shrink-0 h-full" />
+                          <div className="flex-1 min-w-0 px-4 text-slate-200">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {commit.refs && (
+                                <span
+                                  className={cn(
+                                    'max-w-[160px] shrink-0 truncate rounded px-1.5 py-0.5 text-[10px] font-sans font-bold',
+                                    commit.refs.includes('main') || commit.refs.includes('master')
+                                      ? 'bg-purple-500/20 text-purple-300'
+                                      : commit.refs.includes('feature')
+                                        ? 'bg-cyan-500/20 text-cyan-300'
+                                        : 'bg-rose-500/20 text-rose-300'
+                                  )}
+                                >
+                                  {commit.refs.replace('HEAD -> ', '')}
+                                </span>
+                              )}
                               <span
                                 className={cn(
-                                  'max-w-[160px] shrink-0 truncate rounded px-1.5 py-0.5 text-[10px] font-sans font-bold',
-                                  commit.refs.includes('main') || commit.refs.includes('master')
-                                    ? 'bg-purple-500/20 text-purple-300'
-                                    : commit.refs.includes('feature')
-                                      ? 'bg-cyan-500/20 text-cyan-300'
-                                      : 'bg-rose-500/20 text-rose-300'
+                                  'min-w-0 flex-1 truncate',
+                                  isSelected ? 'text-white' : ''
                                 )}
                               >
-                                {commit.refs.replace('HEAD -> ', '')}
+                                {commit.message}
                               </span>
-                            )}
-                            <span
-                              className={cn(
-                                'min-w-0 flex-1 truncate',
-                                isSelected ? 'text-white' : ''
-                              )}
-                            >
-                              {commit.message}
-                            </span>
+                            </div>
+                          </div>
+                          <div className="w-[140px] shrink-0 px-4 text-slate-400 capitalize whitespace-nowrap truncate">
+                            {commit.author_name}
+                          </div>
+                          <div className="w-[140px] shrink-0 px-4 text-slate-400 whitespace-nowrap">
+                            {commitDate}
+                          </div>
+                          <div className="w-[80px] shrink-0 pl-4 pr-6 text-slate-500 text-right">
+                            {commit.hash?.substring(0, 7)}
                           </div>
                         </div>
-                        <div className="w-[140px] shrink-0 px-4 text-slate-400 capitalize whitespace-nowrap truncate">
-                          {commit.author_name}
-                        </div>
-                        <div className="w-[140px] shrink-0 px-4 text-slate-400 whitespace-nowrap">
-                          {commitDate}
-                        </div>
-                        <div className="w-[80px] shrink-0 pl-4 pr-6 text-slate-500 text-right">
-                          {commit.hash?.substring(0, 7)}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
+              ))}
+
+            {activeTab === 'Files' && (
+              <ScrollArea className="h-full">
+                <DiffView
+                  files={filesTabDiff}
+                  isLoading={isLoadingFilesTabDiff}
+                  emptyMessage={
+                    selectedCommit
+                      ? 'No changes in this commit'
+                      : 'Select a commit in the Graph tab to see its changed files'
+                  }
+                />
+              </ScrollArea>
+            )}
+
+            {activeTab === 'Blame' && (
+              <ScrollArea className="h-full">
+                <BlameView
+                  lines={blameLines}
+                  isLoading={isLoadingBlame}
+                  filePath={selectedFilePath || undefined}
+                />
               </ScrollArea>
             )}
           </div>

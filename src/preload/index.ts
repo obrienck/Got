@@ -36,6 +36,8 @@ export const gitAPI = {
     ipcRenderer.invoke('git:getCommitDiff', repoPath, hash),
   listDirectory: (repoPath: string, relativePath?: string) =>
     ipcRenderer.invoke('git:listDirectory', repoPath, relativePath),
+  getFileBlame: (repoPath: string, filePath: string) =>
+    ipcRenderer.invoke('git:getFileBlame', repoPath, filePath),
   pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {

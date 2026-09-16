@@ -159,4 +159,10 @@ export class Repository {
     // matching how GitHub/GitLab show a merge commit's changes.
     return this.git.diff([firstParent || Repository.EMPTY_TREE, hash, '--no-color'])
   }
+
+  /** Raw `--line-porcelain` blame output — parsed on the renderer side,
+   *  matching the getCommitDiff/parseDiff split. */
+  async getFileBlame(filePath: string): Promise<string> {
+    return this.git.raw(['blame', '--line-porcelain', '--', filePath])
+  }
 }

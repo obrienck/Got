@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
+import { formatRelativeTime } from '../src/lib/format-time'
 import gotLogo from '../src/assets/got-logo-transparent.png'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 
@@ -26,18 +27,6 @@ interface BranchManagerScreenProps {
   repoPath: string
   onBack: () => void
   onViewCommit: (hash: string) => void
-}
-
-function formatRelativeTime(dateStr: string): string {
-  if (!dateStr) return ''
-  const diffMs = Date.now() - new Date(dateStr).getTime()
-  const minutes = Math.round(diffMs / 60000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  const days = Math.round(hours / 24)
-  return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
 export default function BranchManagerScreen({

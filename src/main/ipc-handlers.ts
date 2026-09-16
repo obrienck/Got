@@ -202,6 +202,10 @@ export function setupIpcHandlers(): void {
     return repoManager.getRepo(repoPath).listDirectory(relativePath)
   })
 
+  ipcMain.handle('git:getFileBlame', async (_, repoPath: string, filePath: string) => {
+    return repoManager.getRepo(repoPath).getFileBlame(filePath)
+  })
+
   ipcMain.handle('git:pull', async (_, repoPath: string) => {
     const result = await repoManager.getRepo(repoPath).pull()
     return toPlain(result)

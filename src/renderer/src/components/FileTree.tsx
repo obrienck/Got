@@ -23,9 +23,16 @@ export interface FileStatusMap {
 interface FileTreeProps {
   repoPath: string
   statusByPath: FileStatusMap
+  onFileClick?: (path: string) => void
+  selectedFilePath?: string | null
 }
 
-export default function FileTree({ repoPath, statusByPath }: FileTreeProps): React.JSX.Element {
+export default function FileTree({
+  repoPath,
+  statusByPath,
+  onFileClick,
+  selectedFilePath
+}: FileTreeProps): React.JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const toggle = (path: string): void => {
@@ -57,6 +64,8 @@ export default function FileTree({ repoPath, statusByPath }: FileTreeProps): Rea
           expanded={expanded}
           onToggle={toggle}
           statusByPath={statusByPath}
+          onFileClick={onFileClick}
+          selectedFilePath={selectedFilePath}
         />
       ))}
     </div>
@@ -69,7 +78,9 @@ function FileTreeNode({
   depth,
   expanded,
   onToggle,
-  statusByPath
+  statusByPath,
+  onFileClick,
+  selectedFilePath
 }: {
   repoPath: string
   entry: DirEntry
@@ -77,6 +88,8 @@ function FileTreeNode({
   expanded: Set<string>
   onToggle: (path: string) => void
   statusByPath: FileStatusMap
+  onFileClick?: (path: string) => void
+  selectedFilePath?: string | null
 }): React.JSX.Element {
   const isOpen = expanded.has(entry.path)
   const indent = { paddingLeft: 8 + depth * 16 }
@@ -120,6 +133,8 @@ function FileTreeNode({
               expanded={expanded}
               onToggle={onToggle}
               statusByPath={statusByPath}
+              onFileClick={onFileClick}
+              selectedFilePath={selectedFilePath}
             />
           ))}
       </div>
@@ -128,13 +143,16 @@ function FileTreeNode({
 
   const status = statusByPath[entry.path]
   const info = status ? getStatusInfo(status.workingDir, status.index) : null
+  const isSelected = selectedFilePath === entry.path
 
   return (
     <div
+      onClick={() => onFileClick?.(entry.path)}
       style={indent}
       className={cn(
         'flex items-center gap-2 rounded py-1 pr-2 text-[13px] text-slate-400 hover:bg-white/5 cursor-pointer',
-        entry.isIgnored && 'opacity-40'
+        entry.isIgnored && 'opacity-40',
+        isSelected && 'bg-indigo-500/10 text-indigo-300'
       )}
     >
       {/* Spacer matches the chevron's width so file names line up with folder names */}

@@ -1,3 +1,4 @@
-provider: generic
-url: https://example.com/auto-updates
-updaterCacheDirName: temp-app-updater
+provider: github
+owner: obrienck
+repo: Got
+updaterCacheDirName: got-updater

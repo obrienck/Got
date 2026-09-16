@@ -1,6 +1,6 @@
 {
   "name": "got",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Got — a fast, visual Git client",
   "main": "./out/main/index.js",
   "author": "obrienck",

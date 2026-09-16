@@ -687,6 +687,15 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                 <span className="text-xs font-bold tracking-wider text-slate-400">
                   STAGED ({stagedFiles.length})
                 </span>
+                {stagedFiles.length > 0 && (
+                  <button
+                    onClick={() => unstageMutation.mutate(stagedFiles.map((f: any) => f.path))}
+                    disabled={unstageMutation.isPending}
+                    className="text-[11px] font-medium text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"
+                  >
+                    Unstage All
+                  </button>
+                )}
               </div>
               {isLoadingStatus ? (
                 <div className="flex items-center gap-2 text-slate-500 text-xs py-2">
@@ -731,6 +740,15 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                 <span className="text-xs font-bold tracking-wider text-slate-400">
                   UNSTAGED CHANGES ({allUnstaged.length})
                 </span>
+                {allUnstaged.length > 0 && (
+                  <button
+                    onClick={() => stageMutation.mutate(allUnstaged.map((f: any) => f.path))}
+                    disabled={stageMutation.isPending}
+                    className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                  >
+                    Stage All
+                  </button>
+                )}
               </div>
               {isLoadingStatus ? (
                 <div className="flex items-center gap-2 text-slate-500 text-xs py-2">

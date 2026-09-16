@@ -2,7 +2,7 @@
 // Full repository view: top bar + left sidebar + commit graph + right panel
 // Receives repoPath as prop, uses real window.gitAPI via TanStack Query
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   GitPullRequest,
@@ -21,6 +21,7 @@ import {
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { useRepoContext } from '../src/context/RepoContext'
+import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
 
 // --- Utils ---
 
@@ -141,6 +142,28 @@ function getStatusInfo(workingDir: string, index: string) {
 
 const GRAPH_COLORS = ['#a855f7', '#22d3ee', '#f43f5e', '#22c55e', '#f59e0b']
 
+// --- Graph geometry ---
+
+const ROW_HEIGHT = 32
+const LANE_WIDTH = 18
+
+function laneX(col: number): number {
+  return col * LANE_WIDTH + LANE_WIDTH / 2
+}
+
+function edgeY(row: number, edge: 'top' | 'center' | 'bottom'): number {
+  const top = row * ROW_HEIGHT
+  if (edge === 'top') return top
+  if (edge === 'bottom') return top + ROW_HEIGHT
+  return top + ROW_HEIGHT / 2
+}
+
+function edgePath(x0: number, y0: number, x1: number, y1: number): string {
+  if (x0 === x1) return `M ${x0} ${y0} L ${x1} ${y1}`
+  const midY = (y0 + y1) / 2
+  return `M ${x0} ${y0} C ${x0} ${midY}, ${x1} ${midY}, ${x1} ${y1}`
+}
+
 // --- Props ---
 
 interface RepositoryViewProps {
@@ -178,6 +201,21 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
     queryKey: ['log', repoPath],
     queryFn: () => window.gitAPI.log(repoPath, { '--all': true })
   })
+
+  // --- Ancestry-aware commit graph layout ---
+
+  const graphCommits: GraphCommit[] = useMemo(
+    () =>
+      (logData?.all || []).map((c: any) => ({
+        hash: c.hash,
+        parents: typeof c.parents === 'string' ? c.parents.split(' ').filter(Boolean) : []
+      })),
+    [logData]
+  )
+
+  const graphLayout = useMemo(() => buildCommitGraph(graphCommits, GRAPH_COLORS), [graphCommits])
+
+  const graphWidth = Math.max(96, graphLayout.laneCount * LANE_WIDTH + LANE_WIDTH)
 
   // --- Mutations ---
 
@@ -509,97 +547,120 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <table className="w-full text-left text-[13px] border-collapse">
-                  <thead className="sticky top-0 z-10 bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35]">
-                    <tr>
-                      <th className="w-[120px] px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
-                        GRAPH
-                      </th>
-                      <th className="px-4 py-2 font-semibold text-slate-400">MESSAGE</th>
-                      <th className="w-[140px] px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
-                        AUTHOR
-                      </th>
-                      <th className="w-[140px] px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
-                        DATE
-                      </th>
-                      <th className="w-[80px] pl-4 pr-6 py-2 font-semibold text-slate-400 whitespace-nowrap text-right">
-                        SHA
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#1e1e24] font-mono tracking-tight">
-                    {logData?.all?.map((commit: any, i: number) => {
-                      const isSelected = selectedCommit === commit.hash
-                      // Cycle colors based on position
-                      const color = GRAPH_COLORS[i % GRAPH_COLORS.length]
-                      // Format date
-                      const commitDate = commit.date
-                        ? new Date(commit.date).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })
-                        : ''
+                {/* Column header */}
+                <div className="sticky top-0 z-10 flex bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35] text-left text-[13px]">
+                  <div
+                    style={{ width: graphWidth }}
+                    className="shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap"
+                  >
+                    GRAPH
+                  </div>
+                  <div className="flex-1 px-4 py-2 font-semibold text-slate-400">MESSAGE</div>
+                  <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                    AUTHOR
+                  </div>
+                  <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                    DATE
+                  </div>
+                  <div className="w-[80px] shrink-0 pl-4 pr-6 py-2 font-semibold text-slate-400 whitespace-nowrap text-right">
+                    SHA
+                  </div>
+                </div>
 
+                {/* Rows, with the ancestry graph rendered as one SVG overlay behind them */}
+                <div className="relative font-mono tracking-tight text-[13px]">
+                  <svg
+                    width={graphWidth}
+                    height={graphCommits.length * ROW_HEIGHT}
+                    className="absolute top-0 left-0 pointer-events-none"
+                  >
+                    {graphLayout.edges.map((e, i) => (
+                      <path
+                        key={i}
+                        d={edgePath(
+                          laneX(e.fromCol),
+                          edgeY(e.row, e.fromEdge),
+                          laneX(e.toCol),
+                          edgeY(e.row, e.toEdge)
+                        )}
+                        stroke={e.color}
+                        strokeWidth={2}
+                        fill="none"
+                      />
+                    ))}
+                    {graphLayout.nodes.map((n) => {
+                      const commit = logData?.all?.[n.row]
+                      const isSelected = !!commit && selectedCommit === commit.hash
                       return (
-                        <tr
-                          key={commit.hash}
-                          onClick={() => setSelectedCommit(commit.hash)}
-                          className={cn(
-                            'group cursor-pointer transition-colors',
-                            isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/[0.02]'
-                          )}
-                        >
-                          <td className="px-4 py-1 relative">
-                            <div className="flex justify-center h-8 items-center w-full relative">
-                              <div className="absolute top-0 bottom-0 w-0.5 bg-[#2d2d35] left-1/2 -ml-[1px]" />
-                              <div
-                                className={cn(
-                                  'z-10 h-3 w-3 rounded-full border-[2.5px] border-[#0f0f12] ring-1 ring-offset-0',
-                                  isSelected
-                                    ? 'scale-125 ring-white'
-                                    : 'ring-transparent hover:scale-110 transition-transform'
-                                )}
-                                style={{ backgroundColor: color }}
-                              />
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-slate-200 truncate max-w-[200px] sm:max-w-[400px]">
-                            <div className="flex items-center gap-2">
-                              {commit.refs && (
-                                <span
-                                  className={cn(
-                                    'px-1.5 py-0.5 rounded text-[10px] font-sans font-bold',
-                                    commit.refs.includes('main') || commit.refs.includes('master')
-                                      ? 'bg-purple-500/20 text-purple-300'
-                                      : commit.refs.includes('feature')
-                                        ? 'bg-cyan-500/20 text-cyan-300'
-                                        : 'bg-rose-500/20 text-rose-300'
-                                  )}
-                                >
-                                  {commit.refs.replace('HEAD -> ', '')}
-                                </span>
-                              )}
-                              <span className={isSelected ? 'text-white' : ''}>
-                                {commit.message}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 capitalize whitespace-nowrap">
-                            {commit.author_name}
-                          </td>
-                          <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
-                            {commitDate}
-                          </td>
-                          <td className="pl-4 pr-6 py-2 text-slate-500 text-right w-[80px]">
-                            {commit.hash?.substring(0, 7)}
-                          </td>
-                        </tr>
+                        <circle
+                          key={n.row}
+                          cx={laneX(n.col)}
+                          cy={edgeY(n.row, 'center')}
+                          r={isSelected ? 5.5 : 4}
+                          fill={n.color}
+                          stroke="#0f0f12"
+                          strokeWidth={2.5}
+                        />
                       )
                     })}
-                  </tbody>
-                </table>
+                  </svg>
+
+                  {logData?.all?.map((commit: any) => {
+                    const isSelected = selectedCommit === commit.hash
+                    const commitDate = commit.date
+                      ? new Date(commit.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : ''
+
+                    return (
+                      <div
+                        key={commit.hash}
+                        onClick={() => setSelectedCommit(commit.hash)}
+                        style={{ height: ROW_HEIGHT }}
+                        className={cn(
+                          'group flex items-center cursor-pointer transition-colors border-b border-[#1e1e24]',
+                          isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/[0.02]'
+                        )}
+                      >
+                        <div style={{ width: graphWidth }} className="shrink-0 h-full" />
+                        <div className="flex-1 min-w-0 px-4 text-slate-200 truncate">
+                          <div className="flex items-center gap-2">
+                            {commit.refs && (
+                              <span
+                                className={cn(
+                                  'px-1.5 py-0.5 rounded text-[10px] font-sans font-bold shrink-0',
+                                  commit.refs.includes('main') || commit.refs.includes('master')
+                                    ? 'bg-purple-500/20 text-purple-300'
+                                    : commit.refs.includes('feature')
+                                      ? 'bg-cyan-500/20 text-cyan-300'
+                                      : 'bg-rose-500/20 text-rose-300'
+                                )}
+                              >
+                                {commit.refs.replace('HEAD -> ', '')}
+                              </span>
+                            )}
+                            <span className={cn('truncate', isSelected ? 'text-white' : '')}>
+                              {commit.message}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-[140px] shrink-0 px-4 text-slate-400 capitalize whitespace-nowrap truncate">
+                          {commit.author_name}
+                        </div>
+                        <div className="w-[140px] shrink-0 px-4 text-slate-400 whitespace-nowrap">
+                          {commitDate}
+                        </div>
+                        <div className="w-[80px] shrink-0 pl-4 pr-6 text-slate-500 text-right">
+                          {commit.hash?.substring(0, 7)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </ScrollArea>
             )}
           </div>

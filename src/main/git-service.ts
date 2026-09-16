@@ -10,7 +10,18 @@ export class Repository {
     this.git = simpleGit({
       baseDir: path,
       binary: bundledGitPath || 'git',
-      maxConcurrentProcesses: 6
+      maxConcurrentProcesses: 6,
+      config: []
+    })
+
+    // Use the system credential helper (e.g. macOS Keychain) instead of
+    // prompting for credentials on the terminal.  GIT_TERMINAL_PROMPT=0
+    // prevents git from blocking on stdin, and an empty GIT_ASKPASS forces
+    // it to fall through to the credential.helper configured in gitconfig.
+    this.git.env({
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: ''
     })
   }
 
@@ -21,10 +32,17 @@ export class Repository {
   async log(options = {}): Promise<LogResult> {
     return this.git.log({
       ...options,
-      '--graph': null,
-      '--oneline': null,
-      '--all': null,
-      '--decorate': null
+      format: {
+        hash: '%H',
+        date: '%aI',
+        message: '%s',
+        refs: '%D',
+        body: '%b',
+        author_name: '%aN',
+        author_email: '%aE',
+        // Space-separated parent hashes — needed to lay out the ancestry graph.
+        parents: '%P'
+      }
     })
   }
 
@@ -56,6 +74,12 @@ export class Repository {
   }
 
   async clone(url: string, targetPath: string, onProgress: (progress: any) => void): Promise<any> {
-    return simpleGit().clone(url, targetPath, ['--progress'], onProgress)
+    const cloneGit = simpleGit()
+    cloneGit.env({
+      ...process.env,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_ASKPASS: ''
+    })
+    return cloneGit.clone(url, targetPath, ['--progress'], onProgress)
   }
 }

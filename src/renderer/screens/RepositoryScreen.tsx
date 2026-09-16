@@ -7,6 +7,7 @@ import { FolderOpen, FolderGit2, CloudDownload, FolderPlus, X, Loader2 } from 'l
 import { useRepoContext } from '../src/context/RepoContext'
 import RepositoryView from './RepositoryView'
 import gotLogo from '../src/assets/got-logo-transparent.png'
+import { DRAG_REGION } from '../src/lib/platform'
 
 // ─── Welcome Open Screen ─────────────────────────────────────────────────────
 
@@ -132,7 +133,9 @@ function WelcomeOpenScreen() {
   const isBusy = isSelecting || isCloning || isInitializing
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-[#0f0f12]">
+    <div className="relative flex h-screen w-screen items-center justify-center bg-[#0f0f12]">
+      {/* No header on this screen, but the window still needs to be draggable */}
+      <div className={`absolute top-0 left-0 right-0 h-10 ${DRAG_REGION}`} />
       <div className="flex flex-col items-center max-w-3xl w-full px-8">
         {/* Logo */}
         <div className="mb-8 flex items-center gap-3">

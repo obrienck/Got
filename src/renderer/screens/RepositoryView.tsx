@@ -22,6 +22,7 @@ import { useRepoContext } from '../src/context/RepoContext'
 import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
+import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 import BranchManagerScreen from './BranchManagerScreen'
 import CommitDetailScreen from './CommitDetailScreen'
 import gotLogo from '../src/assets/got-logo-transparent.png'
@@ -375,13 +376,21 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
 
   return (
     <div className="dark flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans selection:bg-indigo-500/30">
-      {/* Top Bar */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#2d2d35] bg-[#1a1a1f] px-4 shadow-sm z-10">
-        <div className="flex items-center gap-6">
+      {/* Top Bar — draggable (custom title bar replaces the native one on mac) */}
+      <div
+        className={cn(
+          'flex h-14 shrink-0 items-center justify-between border-b border-[#2d2d35] bg-[#1a1a1f] px-4 shadow-sm z-10',
+          DRAG_REGION
+        )}
+      >
+        <div className={cn('flex items-center gap-6', IS_MAC && 'pl-16')}>
           <button
             onClick={() => setCurrentRepoPath(null)}
             title="Switch repository"
-            className="flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors"
+            className={cn(
+              'flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors',
+              NO_DRAG
+            )}
           >
             <img src={gotLogo} alt="" className="h-6 w-6" />
             Got
@@ -390,7 +399,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="gap-2 px-2.5 hover:bg-slate-800"
+              className={cn('gap-2 px-2.5 hover:bg-slate-800', NO_DRAG)}
               onClick={() => pullMutation.mutate()}
               disabled={pullMutation.isPending}
             >
@@ -404,7 +413,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="gap-2 px-2.5 hover:bg-slate-800"
+              className={cn('gap-2 px-2.5 hover:bg-slate-800', NO_DRAG)}
               onClick={() => pushMutation.mutate()}
               disabled={pushMutation.isPending}
             >
@@ -417,7 +426,10 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             </Button>
             <Button
               size="sm"
-              className="ml-2 gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-medium border-0 px-3"
+              className={cn(
+                'ml-2 gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-medium border-0 px-3',
+                NO_DRAG
+              )}
               onClick={() => setShowBranchManager(true)}
             >
               <GitPullRequest className="h-4 w-4" /> Branch
@@ -439,7 +451,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
           <span className="text-xs text-slate-500 truncate max-w-[180px]" title={repoPath}>
             {repoName}
           </span>
-          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-800">
+          <Button variant="ghost" size="icon" className={cn('h-8 w-8 hover:bg-slate-800', NO_DRAG)}>
             <Settings className="h-4 w-4" />
           </Button>
         </div>

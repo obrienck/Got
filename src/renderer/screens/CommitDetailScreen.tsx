@@ -8,6 +8,7 @@ import { ArrowLeft, FileCode, Copy, Check, Loader2, FilePlus, FileMinus } from '
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import { parseDiff, toSplitRows, type DiffLine } from '../src/lib/diff-parser'
+import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 
 interface CommitDetailScreenProps {
   repoPath: string
@@ -85,12 +86,17 @@ export default function CommitDetailScreen({
 
   return (
     <div className="flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans">
-      {/* Header */}
-      <header className="border-b border-[#2d2d35] bg-[#1a1a1f] px-4 py-3 shrink-0">
-        <div className="flex items-center gap-3 text-sm">
+      {/* Header — draggable (custom title bar replaces the native one on mac) */}
+      <header
+        className={cn('border-b border-[#2d2d35] bg-[#1a1a1f] px-4 py-3 shrink-0', DRAG_REGION)}
+      >
+        <div className={cn('flex items-center gap-3 text-sm', IS_MAC && 'pl-16')}>
           <button
             onClick={onBack}
-            className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+            className={cn(
+              'flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors',
+              NO_DRAG
+            )}
             title="Back to repository"
           >
             <ArrowLeft className="w-4 h-4" />

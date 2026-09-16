@@ -12,6 +12,12 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
+    // Replace macOS's native title bar with our own top bar, keeping just the
+    // traffic-light controls (repositioned to sit inside it) instead of the
+    // default title bar + our custom toolbar stacked on top of each other.
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 16, y: 20 } }
+      : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -41,7 +47,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.obrienck.got')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

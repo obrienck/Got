@@ -20,6 +20,7 @@ import {
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import gotLogo from '../src/assets/got-logo-transparent.png'
+import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 
 interface BranchManagerScreenProps {
   repoPath: string
@@ -119,12 +120,20 @@ export default function BranchManagerScreen({
 
   return (
     <div className="flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans">
-      {/* Header */}
-      <header className="h-14 border-b border-[#2d2d35] bg-[#1a1a1f] flex items-center justify-between px-4 shrink-0">
-        <div className="flex items-center gap-4">
+      {/* Header — draggable (custom title bar replaces the native one on mac) */}
+      <header
+        className={cn(
+          'h-14 border-b border-[#2d2d35] bg-[#1a1a1f] flex items-center justify-between px-4 shrink-0',
+          DRAG_REGION
+        )}
+      >
+        <div className={cn('flex items-center gap-4', IS_MAC && 'pl-16')}>
           <button
             onClick={onBack}
-            className="flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+            className={cn(
+              'flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors',
+              NO_DRAG
+            )}
             title="Back to repository"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -142,7 +151,10 @@ export default function BranchManagerScreen({
           <button
             disabled
             title="Coming soon"
-            className="px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed"
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed',
+              NO_DRAG
+            )}
           >
             <GitMerge className="w-3.5 h-3.5" />
             Merge
@@ -150,7 +162,10 @@ export default function BranchManagerScreen({
           <button
             disabled
             title="Coming soon"
-            className="px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed"
+            className={cn(
+              'px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed',
+              NO_DRAG
+            )}
           >
             <GitPullRequestArrow className="w-3.5 h-3.5" />
             Rebase
@@ -167,12 +182,18 @@ export default function BranchManagerScreen({
                   if (e.key === 'Escape') setIsCreatingBranch(false)
                 }}
                 placeholder="new-branch-name"
-                className="h-8 w-40 rounded bg-[#0f0f12] border border-[#33333d] px-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className={cn(
+                  'h-8 w-40 rounded bg-[#0f0f12] border border-[#33333d] px-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500',
+                  NO_DRAG
+                )}
               />
               <button
                 onClick={submitNewBranch}
                 disabled={!newBranchName.trim() || createBranchMutation.isPending}
-                className="h-8 px-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs disabled:opacity-50"
+                className={cn(
+                  'h-8 px-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs disabled:opacity-50',
+                  NO_DRAG
+                )}
               >
                 {createBranchMutation.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -184,7 +205,10 @@ export default function BranchManagerScreen({
           ) : (
             <button
               onClick={() => setIsCreatingBranch(true)}
-              className="px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors flex items-center gap-2"
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors flex items-center gap-2',
+                NO_DRAG
+              )}
             >
               <Plus className="w-3.5 h-3.5" />
               Create Branch

@@ -24,6 +24,7 @@ import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import BranchManagerScreen from './BranchManagerScreen'
 import CommitDetailScreen from './CommitDetailScreen'
+import gotLogo from '../src/assets/got-logo-transparent.png'
 
 // --- Inline UI Components (shadcn-like) ---
 
@@ -382,7 +383,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             title="Switch repository"
             className="flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors"
           >
-            <span className="text-indigo-400">{'</>'}</span>
+            <img src={gotLogo} alt="" className="h-6 w-6" />
             Got
           </button>
           <div className="flex items-center gap-1.5 border-l border-[#33333d] pl-6">

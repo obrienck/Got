@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { FolderOpen, FolderGit2, CloudDownload, FolderPlus, X, Loader2 } from 'lucide-react'
 import { useRepoContext } from '../src/context/RepoContext'
 import RepositoryView from './RepositoryView'
+import gotLogo from '../src/assets/got-logo-transparent.png'
 
 // ─── Welcome Open Screen ─────────────────────────────────────────────────────
 
@@ -135,13 +136,9 @@ function WelcomeOpenScreen() {
       <div className="flex flex-col items-center max-w-3xl w-full px-8">
         {/* Logo */}
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/20">
-            <FolderGit2 className="h-7 w-7 text-indigo-400" />
-          </div>
+          <img src={gotLogo} alt="Got" className="h-16 w-16" />
           <div>
-            <div className="flex items-center gap-1.5 text-xl font-bold text-white">
-              <span className="text-indigo-400">{'</>'}</span> Got
-            </div>
+            <div className="text-xl font-bold text-white">Got</div>
             <p className="text-xs text-slate-500">Modern Git Client</p>
           </div>
         </div>

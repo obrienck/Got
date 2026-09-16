@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
+import gotLogo from '../src/assets/got-logo-transparent.png'
 
 interface BranchManagerScreenProps {
   repoPath: string
@@ -129,7 +130,7 @@ export default function BranchManagerScreen({
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2">
-            <GitBranch className="w-5 h-5 text-indigo-500" />
+            <img src={gotLogo} alt="" className="h-6 w-6" />
             <span className="font-semibold text-slate-100">Got</span>
           </div>
           <div className="h-4 w-px bg-[#33333d]" />

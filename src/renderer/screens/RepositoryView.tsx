@@ -203,6 +203,11 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
     queryFn: () => window.gitAPI.getUserConfig(repoPath)
   })
 
+  const { data: localBranches } = useQuery({
+    queryKey: ['branchesLocal', repoPath],
+    queryFn: () => window.gitAPI.branchesLocal(repoPath)
+  })
+
   // --- Ancestry-aware commit graph layout ---
 
   const graphCommits: GraphCommit[] = useMemo(
@@ -223,6 +228,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   const invalidateQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['status', repoPath] })
     queryClient.invalidateQueries({ queryKey: ['log', repoPath] })
+    queryClient.invalidateQueries({ queryKey: ['branchesLocal', repoPath] })
   }
 
   const stageMutation = useMutation({
@@ -328,22 +334,9 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   })
   const folders = Array.from(folderSet)
 
-  // Branch list from log refs
-  const branchSet = new Set<string>()
-  if (currentBranch) branchSet.add(currentBranch)
-  logData?.all?.forEach((commit: any) => {
-    if (commit.refs) {
-      commit.refs.split(',').forEach((ref: string) => {
-        const trimmed = ref.trim()
-          .replace('HEAD -> ', '')
-          .replace('origin/', '')
-        if (trimmed && !trimmed.includes('tag:')) {
-          branchSet.add(trimmed)
-        }
-      })
-    }
-  })
-  const branches = Array.from(branchSet).slice(0, 10)
+  // Real local branches (not derived from log refs, which also include
+  // non-branch entries like HEAD and refs/stash)
+  const branches: string[] = localBranches?.all || []
 
   // Graph colors for branch assignment
   const branchColors: Record<string, string> = {}
@@ -433,7 +426,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <div className="flex w-[280px] shrink-0 flex-col border-r border-[#2d2d35] bg-[#1a1a1f]">
+        <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-[#2d2d35] bg-[#1a1a1f]">
           <div className="flex h-10 items-center justify-between px-4">
             <h2 className="text-[11px] font-bold tracking-wider text-slate-500">REPOSITORY</h2>
             <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-white">
@@ -637,12 +630,12 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                         )}
                       >
                         <div style={{ width: graphWidth }} className="shrink-0 h-full" />
-                        <div className="flex-1 min-w-0 px-4 text-slate-200 truncate">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0 px-4 text-slate-200">
+                          <div className="flex items-center gap-2 min-w-0">
                             {commit.refs && (
                               <span
                                 className={cn(
-                                  'px-1.5 py-0.5 rounded text-[10px] font-sans font-bold shrink-0',
+                                  'max-w-[160px] shrink-0 truncate rounded px-1.5 py-0.5 text-[10px] font-sans font-bold',
                                   commit.refs.includes('main') || commit.refs.includes('master')
                                     ? 'bg-purple-500/20 text-purple-300'
                                     : commit.refs.includes('feature')
@@ -653,7 +646,12 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                                 {commit.refs.replace('HEAD -> ', '')}
                               </span>
                             )}
-                            <span className={cn('truncate', isSelected ? 'text-white' : '')}>
+                            <span
+                              className={cn(
+                                'min-w-0 flex-1 truncate',
+                                isSelected ? 'text-white' : ''
+                              )}
+                            >
                               {commit.message}
                             </span>
                           </div>
@@ -677,7 +675,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
         </div>
 
         {/* Right Panel — Staged/Unstaged + Commit */}
-        <div className="flex w-[320px] shrink-0 flex-col border-l border-[#2d2d35] bg-[#1a1a1f] shadow-xl z-20">
+        <div className="flex h-full w-[320px] shrink-0 flex-col border-l border-[#2d2d35] bg-[#1a1a1f] shadow-xl z-20">
           <ScrollArea className="flex-1 p-4 pb-0">
             {/* Staged Section */}
             <div className="mb-6">

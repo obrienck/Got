@@ -58,11 +58,26 @@ export function buildCommitGraph(commits: GraphCommit[], palette: string[]): Com
       if (h === commit.hash) matchingCols.push(col)
     })
 
-    const primaryCol = matchingCols.length > 0 ? matchingCols[0] : allocateColumn(commit.hash, true)
-    if (matchingCols.length === 0) matchingCols.push(primaryCol)
+    const isNewTip = matchingCols.length === 0
+    const primaryCol = isNewTip ? allocateColumn(commit.hash, true) : matchingCols[0]
+    if (isNewTip) matchingCols.push(primaryCol)
 
     const color = laneColors[primaryCol]
     nodes.push({ row, col: primaryCol, color })
+
+    // The primary lane's own incoming line, from the row's top edge down to
+    // its node — every lane except a brand new tip (nothing pointed to it
+    // yet) needs this, or the node floats disconnected from the line above.
+    if (!isNewTip) {
+      edges.push({
+        row,
+        fromCol: primaryCol,
+        toCol: primaryCol,
+        color,
+        fromEdge: 'top',
+        toEdge: 'center'
+      })
+    }
 
     // Untouched lanes just pass straight through this row.
     lanes.forEach((h, col) => {

@@ -370,7 +370,7 @@ export default function BranchManagerScreen({
                         )}
                         <span
                           className={cn(
-                            'text-sm truncate',
+                            'min-w-0 flex-1 truncate text-sm',
                             isSynced ? 'text-slate-400 italic' : 'text-slate-200 font-medium'
                           )}
                         >

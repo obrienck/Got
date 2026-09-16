@@ -1,4 +1,13 @@
 import { simpleGit, SimpleGit, StatusResult, LogResult } from 'simple-git'
+import { readdir } from 'fs/promises'
+import { join } from 'path'
+
+export interface DirEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+  isIgnored: boolean
+}
 
 export class Repository {
   private git: SimpleGit
@@ -118,6 +127,30 @@ export class Repository {
   // The well-known empty-tree SHA — same in every git repo, used so a root
   // commit (no parent) can be diffed like any other.
   private static readonly EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+  /** Lists one directory's immediate children (lazy — callers fetch deeper
+   *  levels on demand as folders are expanded), sorted directories-first. */
+  async listDirectory(relativePath = ''): Promise<DirEntry[]> {
+    const dirPath = join(this.path, relativePath)
+    const entries = await readdir(dirPath, { withFileTypes: true })
+    const visible = entries.filter((e) => e.name !== '.git')
+    if (visible.length === 0) return []
+
+    const relPaths = visible.map((e) => (relativePath ? `${relativePath}/${e.name}` : e.name))
+    const ignored = new Set(await this.git.checkIgnore(relPaths).catch(() => []))
+
+    return visible
+      .map((e, i) => ({
+        name: e.name,
+        path: relPaths[i],
+        isDirectory: e.isDirectory(),
+        isIgnored: ignored.has(relPaths[i])
+      }))
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+  }
 
   async getCommitDiff(hash: string): Promise<string> {
     const parentLine = await this.git.raw(['rev-list', '--parents', '-n', '1', hash])

@@ -10,11 +10,6 @@ import {
   ArrowUpToLine,
   Settings,
   Plus,
-  ChevronRight,
-  ChevronDown,
-  FileText,
-  FileCode,
-  FolderOpen,
   Check,
   Loader2
 } from 'lucide-react'
@@ -23,6 +18,8 @@ import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
+import { getStatusInfo } from '../src/lib/file-status'
+import FileTree from '../src/components/FileTree'
 import BranchManagerScreen from './BranchManagerScreen'
 import CommitDetailScreen from './CommitDetailScreen'
 import gotLogo from '../src/assets/got-logo-transparent.png'
@@ -116,26 +113,6 @@ const ScrollArea = ({
   className?: string
 }) => <div className={cn('overflow-y-auto overflow-x-hidden', className)}>{children}</div>
 
-// --- File status helpers ---
-
-function getStatusInfo(workingDir: string, index: string) {
-  // Determine the display status letter + color from simple-git StatusResult fields
-  const code = workingDir !== ' ' ? workingDir : index
-  switch (code) {
-    case 'M':
-      return { letter: 'M', bg: 'bg-purple-500/10', text: 'text-purple-400' }
-    case 'A':
-    case '?':
-      return { letter: 'A', bg: 'bg-green-500/10', text: 'text-green-400' }
-    case 'D':
-      return { letter: 'D', bg: 'bg-rose-500/10', text: 'text-rose-400' }
-    case 'R':
-      return { letter: 'R', bg: 'bg-cyan-500/10', text: 'text-cyan-400' }
-    default:
-      return { letter: code || 'M', bg: 'bg-purple-500/10', text: 'text-purple-400' }
-  }
-}
-
 // --- Graph color cycling ---
 
 const GRAPH_COLORS = ['#a855f7', '#22d3ee', '#f43f5e', '#22c55e', '#f59e0b']
@@ -178,7 +155,6 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
   const [activeTab, setActiveTab] = useState('Graph')
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
   const [viewingCommitHash, setViewingCommitHash] = useState<string | null>(null)
   const [showBranchManager, setShowBranchManager] = useState(false)
@@ -272,9 +248,6 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
     onSuccess: invalidateQueries
   })
 
-  const toggleFolder = (folder: string) =>
-    setExpandedFolders((prev) => ({ ...prev, [folder]: !prev[folder] }))
-
   // --- Keyboard Shortcuts ---
 
   useEffect(() => {
@@ -328,15 +301,11 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
 
   const allUnstaged = [...unstagedFiles, ...untrackedFiles]
 
-  // Build folder tree from files for left sidebar
-  const folderSet = new Set<string>()
+  // Path -> status, so the file tree can badge changed files
+  const statusByPath: Record<string, { workingDir: string; index: string }> = {}
   statusData?.files?.forEach((f: any) => {
-    const parts = f.path.split('/')
-    if (parts.length > 1) {
-      folderSet.add(parts[0])
-    }
+    statusByPath[f.path] = { workingDir: f.working_dir, index: f.index }
   })
-  const folders = Array.from(folderSet)
 
   // Real local branches (not derived from log refs, which also include
   // non-branch entries like HEAD and refs/stash)
@@ -469,48 +438,9 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
           </div>
 
           <ScrollArea className="flex-1 px-2 pb-4">
-            {/* File Tree — real folders from status */}
-            <div className="space-y-0.5 mt-1">
-              {folders.map((folder) => {
-                const folderFiles =
-                  statusData?.files?.filter((f: any) => f.path.startsWith(folder + '/')) || []
-                return (
-                  <div key={folder}>
-                    <button
-                      onClick={() => toggleFolder(folder)}
-                      className="flex w-full items-center gap-1.5 rounded py-1 px-2 text-sm text-slate-300 hover:bg-white/5"
-                    >
-                      {expandedFolders[folder] ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      )}
-                      <FolderOpen className="h-3.5 w-3.5 text-indigo-400" />
-                      {folder}/
-                    </button>
-                    {expandedFolders[folder] && (
-                      <div className="ml-5 flex flex-col gap-0.5 border-l border-[#33333d] pl-1.5 mt-0.5">
-                        {folderFiles.map((f: any) => {
-                          const fileName = f.path.split('/').pop()
-                          return (
-                            <div
-                              key={f.path}
-                              className="flex items-center gap-2 rounded py-1 px-2 text-[13px] text-slate-400 hover:bg-white/5 cursor-pointer"
-                            >
-                              {f.path.endsWith('.tsx') || f.path.endsWith('.ts') ? (
-                                <FileCode className="h-3.5 w-3.5 text-cyan-400/80" />
-                              ) : (
-                                <FileText className="h-3.5 w-3.5 text-yellow-400/80" />
-                              )}
-                              {fileName}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+            {/* File Tree — real recursive directory browser, lazily loaded */}
+            <div className="mt-1">
+              <FileTree repoPath={repoPath} statusByPath={statusByPath} />
             </div>
 
             {/* Local Branches */}

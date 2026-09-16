@@ -28,6 +28,12 @@ declare global {
       createBranch: (repoPath: string, name: string) => Promise<any>
       getUserConfig: (repoPath: string) => Promise<{ name: string; email: string }>
       getCommitDiff: (repoPath: string, hash: string) => Promise<string>
+      listDirectory: (
+        repoPath: string,
+        relativePath?: string
+      ) => Promise<
+        Array<{ name: string; path: string; isDirectory: boolean; isIgnored: boolean }>
+      >
       pull: (repoPath: string) => Promise<any>
       push: (repoPath: string) => Promise<any>
       onProgress: (callback: (progress: any) => void) => void

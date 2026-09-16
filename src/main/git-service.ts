@@ -73,13 +73,45 @@ export class Repository {
     return this.git.checkout(branch)
   }
 
-  async clone(url: string, targetPath: string, onProgress: (progress: any) => void): Promise<any> {
+  async branchesLocal(): Promise<any> {
+    return this.git.branchLocal()
+  }
+
+  async branchesRemote(): Promise<any> {
+    return this.git.branch(['-r'])
+  }
+
+  async tags(): Promise<any> {
+    return this.git.tags()
+  }
+
+  async stashes(): Promise<any> {
+    return this.git.stashList()
+  }
+
+  async createBranch(name: string): Promise<any> {
+    return this.git.checkoutLocalBranch(name)
+  }
+
+  async getUserConfig(): Promise<{ name: string; email: string }> {
+    const [name, email] = await Promise.all([
+      this.git.raw(['config', 'user.name']).catch(() => ''),
+      this.git.raw(['config', 'user.email']).catch(() => '')
+    ])
+    return { name: name.trim(), email: email.trim() }
+  }
+
+  async clone(url: string, targetPath: string): Promise<any> {
     const cloneGit = simpleGit()
     cloneGit.env({
       ...process.env,
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: ''
     })
-    return cloneGit.clone(url, targetPath, ['--progress'], onProgress)
+    return cloneGit.clone(url, targetPath, ['--progress'])
+  }
+
+  async init(): Promise<any> {
+    return this.git.init()
   }
 }

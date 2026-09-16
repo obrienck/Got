@@ -34,9 +34,6 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
-
-  // Setup custom IPC handlers for git (pass mainWindow for dialog parent)
-  setupIpcHandlers(mainWindow)
 }
 
 // This method will be called when Electron has finished
@@ -54,6 +51,11 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+
+  // IPC handlers are process-global (not per-window), so they must be
+  // registered exactly once — never inside createWindow(), which also runs
+  // from 'activate' below and would try to re-register every channel.
+  setupIpcHandlers()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

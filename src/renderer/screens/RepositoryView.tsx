@@ -18,16 +18,11 @@ import {
   Check,
   Loader2
 } from 'lucide-react'
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
 import { useRepoContext } from '../src/context/RepoContext'
 import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
-
-// --- Utils ---
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
+import { cn } from '../src/lib/cn'
+import { initialsFor, avatarColorFor } from '../src/lib/avatar'
+import BranchManagerScreen from './BranchManagerScreen'
 
 // --- Inline UI Components (shadcn-like) ---
 
@@ -182,6 +177,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   const [activeTab, setActiveTab] = useState('Graph')
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+  const [showBranchManager, setShowBranchManager] = useState(false)
 
   // --- TanStack Queries (REAL data from window.gitAPI) ---
 
@@ -200,6 +196,11 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   } = useQuery({
     queryKey: ['log', repoPath],
     queryFn: () => window.gitAPI.log(repoPath, { '--all': true })
+  })
+
+  const { data: userConfig } = useQuery({
+    queryKey: ['userConfig', repoPath],
+    queryFn: () => window.gitAPI.getUserConfig(repoPath)
   })
 
   // --- Ancestry-aware commit graph layout ---
@@ -353,15 +354,23 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   // Repo display name from path
   const repoName = repoPath.split('/').pop() || repoPath
 
+  if (showBranchManager) {
+    return <BranchManagerScreen repoPath={repoPath} onBack={() => setShowBranchManager(false)} />
+  }
+
   return (
     <div className="dark flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans selection:bg-indigo-500/30">
       {/* Top Bar */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#2d2d35] bg-[#1a1a1f] px-4 shadow-sm z-10">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors">
+          <button
+            onClick={() => setCurrentRepoPath(null)}
+            title="Switch repository"
+            className="flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors"
+          >
             <span className="text-indigo-400">{'</>'}</span>
             Got
-          </div>
+          </button>
           <div className="flex items-center gap-1.5 border-l border-[#33333d] pl-6">
             <Button
               variant="ghost"
@@ -394,6 +403,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
             <Button
               size="sm"
               className="ml-2 gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-medium border-0 px-3"
+              onClick={() => setShowBranchManager(true)}
             >
               <GitPullRequest className="h-4 w-4" /> Branch
             </Button>
@@ -789,6 +799,24 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
               )}
             </Button>
           </div>
+
+          {/* Committer Profile */}
+          {userConfig?.name && (
+            <div className="flex items-center gap-3 p-3 border-t border-[#2d2d35] bg-[#0f0f12]/40 shrink-0">
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
+                  avatarColorFor(userConfig.name)
+                )}
+              >
+                {initialsFor(userConfig.name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium text-white">{userConfig.name}</div>
+                <div className="truncate text-[11px] text-slate-500">{userConfig.email}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

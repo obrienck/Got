@@ -1,7 +1,7 @@
 // src/main/ipc-handlers.ts
 // All IPC handlers for Git operations + repository selection/persistence
 
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, type OpenDialogOptions } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import StoreModule from 'electron-store'
@@ -30,11 +30,29 @@ function persistRepoPath(repoPath: string): void {
   store.set('recentRepos', updated)
 }
 
-export function setupIpcHandlers(mainWindow: BrowserWindow): void {
+/** Derives a folder name from a clone URL, e.g. "https://host/user/repo.git" -> "repo". */
+function repoNameFromUrl(url: string): string {
+  const cleaned = url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '')
+  const lastSegment = cleaned.split(/[/:]/).pop()
+  return lastSegment || 'repository'
+}
+
+/** Looked up fresh on every call (never captured), since the app's window can be
+ *  closed and recreated (e.g. macOS 'activate') independently of when these
+ *  handlers were registered. */
+function openDirectoryDialog(options: OpenDialogOptions): ReturnType<typeof dialog.showOpenDialog> {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+  return win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options)
+}
+
+export function setupIpcHandlers(): void {
   // --- Repository selection & persistence ---
 
   ipcMain.handle('git:selectRepository', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await openDirectoryDialog({
       title: 'Open Git Repository',
       properties: ['openDirectory'],
       buttonLabel: 'Open Repository'
@@ -55,6 +73,58 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // Persist and return
     persistRepoPath(selectedPath)
     return { path: selectedPath }
+  })
+
+  ipcMain.handle('git:cloneRepository', async (_, url: string) => {
+    const result = await openDirectoryDialog({
+      title: 'Choose where to clone this repository',
+      properties: ['openDirectory'],
+      buttonLabel: 'Select Folder'
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const targetPath = join(result.filePaths[0], repoNameFromUrl(url))
+    if (existsSync(targetPath)) {
+      return { error: 'DIR_EXISTS', path: targetPath }
+    }
+
+    try {
+      await repoManager.getRepo(targetPath).clone(url, targetPath)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+
+    persistRepoPath(targetPath)
+    return { path: targetPath }
+  })
+
+  ipcMain.handle('git:initRepository', async () => {
+    const result = await openDirectoryDialog({
+      title: 'Choose or create a folder for the new repository',
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: 'Init Repository'
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    const targetPath = result.filePaths[0]
+    if (existsSync(join(targetPath, '.git'))) {
+      return { error: 'ALREADY_A_REPO', path: targetPath }
+    }
+
+    try {
+      await repoManager.getRepo(targetPath).init()
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+
+    persistRepoPath(targetPath)
+    return { path: targetPath }
   })
 
   ipcMain.handle('git:getRecentRepos', async () => {
@@ -94,6 +164,34 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('git:checkout', async (_, repoPath: string, branch: string) => {
     return repoManager.getRepo(repoPath).checkout(branch)
+  })
+
+  ipcMain.handle('git:branchesLocal', async (_, repoPath: string) => {
+    const result = await repoManager.getRepo(repoPath).branchesLocal()
+    return toPlain(result)
+  })
+
+  ipcMain.handle('git:branchesRemote', async (_, repoPath: string) => {
+    const result = await repoManager.getRepo(repoPath).branchesRemote()
+    return toPlain(result)
+  })
+
+  ipcMain.handle('git:tags', async (_, repoPath: string) => {
+    const result = await repoManager.getRepo(repoPath).tags()
+    return toPlain(result)
+  })
+
+  ipcMain.handle('git:stashes', async (_, repoPath: string) => {
+    const result = await repoManager.getRepo(repoPath).stashes()
+    return toPlain(result)
+  })
+
+  ipcMain.handle('git:createBranch', async (_, repoPath: string, name: string) => {
+    return repoManager.getRepo(repoPath).createBranch(name)
+  })
+
+  ipcMain.handle('git:getUserConfig', async (_, repoPath: string) => {
+    return repoManager.getRepo(repoPath).getUserConfig()
   })
 
   ipcMain.handle('git:pull', async (_, repoPath: string) => {

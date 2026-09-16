@@ -10,6 +10,8 @@ const api = {}
 export const gitAPI = {
   // --- Repository selection & persistence ---
   selectRepository: () => ipcRenderer.invoke('git:selectRepository'),
+  cloneRepository: (url: string) => ipcRenderer.invoke('git:cloneRepository', url),
+  initRepository: () => ipcRenderer.invoke('git:initRepository'),
   getRecentRepos: () => ipcRenderer.invoke('git:getRecentRepos'),
   getLastRepoPath: () => ipcRenderer.invoke('git:getLastRepoPath'),
 
@@ -23,6 +25,13 @@ export const gitAPI = {
     ipcRenderer.invoke('git:commit', repoPath, message, files),
   checkout: (repoPath: string, branch: string) =>
     ipcRenderer.invoke('git:checkout', repoPath, branch),
+  branchesLocal: (repoPath: string) => ipcRenderer.invoke('git:branchesLocal', repoPath),
+  branchesRemote: (repoPath: string) => ipcRenderer.invoke('git:branchesRemote', repoPath),
+  tags: (repoPath: string) => ipcRenderer.invoke('git:tags', repoPath),
+  stashes: (repoPath: string) => ipcRenderer.invoke('git:stashes', repoPath),
+  createBranch: (repoPath: string, name: string) =>
+    ipcRenderer.invoke('git:createBranch', repoPath, name),
+  getUserConfig: (repoPath: string) => ipcRenderer.invoke('git:getUserConfig', repoPath),
   pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {

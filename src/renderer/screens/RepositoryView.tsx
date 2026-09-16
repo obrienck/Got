@@ -23,6 +23,7 @@ import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
 import { cn } from '../src/lib/cn'
 import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import BranchManagerScreen from './BranchManagerScreen'
+import CommitDetailScreen from './CommitDetailScreen'
 
 // --- Inline UI Components (shadcn-like) ---
 
@@ -177,6 +178,7 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   const [activeTab, setActiveTab] = useState('Graph')
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+  const [viewingCommitHash, setViewingCommitHash] = useState<string | null>(null)
   const [showBranchManager, setShowBranchManager] = useState(false)
 
   // --- TanStack Queries (REAL data from window.gitAPI) ---
@@ -347,8 +349,27 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
   // Repo display name from path
   const repoName = repoPath.split('/').pop() || repoPath
 
+  const viewingCommit = viewingCommitHash
+    ? logData?.all?.find((c: any) => c.hash === viewingCommitHash)
+    : null
+  if (viewingCommit) {
+    return (
+      <CommitDetailScreen
+        repoPath={repoPath}
+        commit={viewingCommit}
+        onBack={() => setViewingCommitHash(null)}
+      />
+    )
+  }
+
   if (showBranchManager) {
-    return <BranchManagerScreen repoPath={repoPath} onBack={() => setShowBranchManager(false)} />
+    return (
+      <BranchManagerScreen
+        repoPath={repoPath}
+        onBack={() => setShowBranchManager(false)}
+        onViewCommit={setViewingCommitHash}
+      />
+    )
   }
 
   return (
@@ -623,6 +644,8 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
                       <div
                         key={commit.hash}
                         onClick={() => setSelectedCommit(commit.hash)}
+                        onDoubleClick={() => setViewingCommitHash(commit.hash)}
+                        title="Double-click to view commit details"
                         style={{ height: ROW_HEIGHT }}
                         className={cn(
                           'group flex items-center cursor-pointer transition-colors border-b border-[#1e1e24]',

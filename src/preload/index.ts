@@ -32,6 +32,8 @@ export const gitAPI = {
   createBranch: (repoPath: string, name: string) =>
     ipcRenderer.invoke('git:createBranch', repoPath, name),
   getUserConfig: (repoPath: string) => ipcRenderer.invoke('git:getUserConfig', repoPath),
+  getCommitDiff: (repoPath: string, hash: string) =>
+    ipcRenderer.invoke('git:getCommitDiff', repoPath, hash),
   pull: (repoPath: string) => ipcRenderer.invoke('git:pull', repoPath),
   push: (repoPath: string) => ipcRenderer.invoke('git:push', repoPath),
   onProgress: (callback: (progress: any) => void) => {

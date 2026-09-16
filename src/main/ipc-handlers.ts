@@ -194,6 +194,10 @@ export function setupIpcHandlers(): void {
     return repoManager.getRepo(repoPath).getUserConfig()
   })
 
+  ipcMain.handle('git:getCommitDiff', async (_, repoPath: string, hash: string) => {
+    return repoManager.getRepo(repoPath).getCommitDiff(hash)
+  })
+
   ipcMain.handle('git:pull', async (_, repoPath: string) => {
     const result = await repoManager.getRepo(repoPath).pull()
     return toPlain(result)

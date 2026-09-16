@@ -114,4 +114,16 @@ export class Repository {
   async init(): Promise<any> {
     return this.git.init()
   }
+
+  // The well-known empty-tree SHA — same in every git repo, used so a root
+  // commit (no parent) can be diffed like any other.
+  private static readonly EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+  async getCommitDiff(hash: string): Promise<string> {
+    const parentLine = await this.git.raw(['rev-list', '--parents', '-n', '1', hash])
+    const [, firstParent] = parentLine.trim().split(' ')
+    // For a merge commit this diffs against the first (mainline) parent only,
+    // matching how GitHub/GitLab show a merge commit's changes.
+    return this.git.diff([firstParent || Repository.EMPTY_TREE, hash, '--no-color'])
+  }
 }

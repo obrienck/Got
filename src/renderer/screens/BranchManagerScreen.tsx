@@ -23,6 +23,7 @@ import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 interface BranchManagerScreenProps {
   repoPath: string
   onBack: () => void
+  onViewCommit: (hash: string) => void
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -39,7 +40,8 @@ function formatRelativeTime(dateStr: string): string {
 
 export default function BranchManagerScreen({
   repoPath,
-  onBack
+  onBack,
+  onViewCommit
 }: BranchManagerScreenProps): React.JSX.Element {
   const queryClient = useQueryClient()
   const [isCreatingBranch, setIsCreatingBranch] = useState(false)
@@ -340,7 +342,9 @@ export default function BranchManagerScreen({
               return (
                 <div
                   key={commit.hash}
-                  className="flex items-center px-4 py-3 border-b border-[#1e1e24] hover:bg-white/[0.02] transition-colors group"
+                  onDoubleClick={() => onViewCommit(commit.hash)}
+                  title="Double-click to view commit details"
+                  className="flex items-center px-4 py-3 border-b border-[#1e1e24] hover:bg-white/[0.02] transition-colors group cursor-pointer"
                 >
                   <div className="w-12 flex justify-center shrink-0">
                     <div className={cn('w-2 h-2 rounded-full relative', dotColor)}>

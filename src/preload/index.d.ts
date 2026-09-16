@@ -27,6 +27,7 @@ declare global {
       stashes: (repoPath: string) => Promise<any>
       createBranch: (repoPath: string, name: string) => Promise<any>
       getUserConfig: (repoPath: string) => Promise<{ name: string; email: string }>
+      getCommitDiff: (repoPath: string, hash: string) => Promise<string>
       pull: (repoPath: string) => Promise<any>
       push: (repoPath: string) => Promise<any>
       onProgress: (callback: (progress: any) => void) => void

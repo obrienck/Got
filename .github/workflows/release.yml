@@ -42,3 +42,28 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-arch:
+    # Waits for the release job so the GitHub Release (created by
+    # electron-builder's publish step) already exists to attach to.
+    needs: release
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed git nodejs npm github-cli
+
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Build package (makepkg refuses to run as root)
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE' && makepkg -f --noconfirm"
+
+      - name: Upload package to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" got-*-x86_64.pkg.tar.zst --clobber -R ${{ github.repository }}

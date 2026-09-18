@@ -37,6 +37,8 @@ Download the latest build for your platform from the
 - **macOS** — `.dmg` (Apple Silicon)
 - **Windows** — `-setup.exe` (or the portable `.zip`)
 - **Linux** — `.AppImage` or `.deb`
+- **Arch / Omarchy** — `.pkg.tar.zst`, install with
+  `sudo pacman -U got-*.pkg.tar.zst`
 
 > **Heads up:** these builds aren't signed with a paid Apple/Microsoft
 > developer certificate yet, so your OS will warn you on first launch:
@@ -69,6 +71,11 @@ npm run build:linux  # AppImage + .deb
 ```
 
 Output lands in `dist/`.
+
+On Arch / Omarchy, build the pacman package instead with `makepkg -f`
+(run from the repo root, using the `PKGBUILD` at the top level) — this
+produces a `got-*-x86_64.pkg.tar.zst` you can install with
+`sudo pacman -U`.
 
 ### Type-checking & linting
 

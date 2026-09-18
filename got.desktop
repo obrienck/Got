@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Got
+Comment=A fast, visual Git client
+Exec=got
+Icon=got
+Terminal=false
+Type=Application
+Categories=Development;
+StartupWMClass=got

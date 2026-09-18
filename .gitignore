@@ -4,3 +4,7 @@ out
 .DS_Store
 .eslintcache
 *.log*
+
+# makepkg (Arch/Omarchy packaging) build output
+pkg/
+*.pkg.tar.*

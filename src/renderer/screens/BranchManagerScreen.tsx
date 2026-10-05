@@ -22,6 +22,7 @@ import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import { formatRelativeTime } from '../src/lib/format-time'
 import gotLogo from '../src/assets/got-logo-transparent.png'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
+import { repoDisplayName } from '../../shared/repo-location'
 
 interface BranchManagerScreenProps {
   repoPath: string
@@ -95,7 +96,7 @@ export default function BranchManagerScreen({
   const tags: string[] = tagsData?.all || []
   const stashes: any[] = stashesData?.all || []
   const commits: any[] = logData?.all || []
-  const repoName = repoPath.split('/').pop() || repoPath
+  const repoName = repoDisplayName(repoPath)
 
   const ahead = statusData?.ahead ?? 0
   const behind = statusData?.behind ?? 0

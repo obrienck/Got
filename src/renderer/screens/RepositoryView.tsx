@@ -11,7 +11,10 @@ import {
   Settings,
   Plus,
   Check,
-  Loader2
+  Loader2,
+  Server,
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react'
 import { useRepoContext } from '../src/context/RepoContext'
 import { buildCommitGraph, type GraphCommit } from '../src/lib/commit-graph'
@@ -27,6 +30,7 @@ import BlameView from '../src/components/BlameView'
 import BranchManagerScreen from './BranchManagerScreen'
 import CommitDetailScreen from './CommitDetailScreen'
 import gotLogo from '../src/assets/got-logo-transparent.png'
+import { repoDisplayName, repoHostLabel } from '../../shared/repo-location'
 
 // --- Inline UI Components (shadcn-like) ---
 
@@ -162,7 +166,13 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
 
   // --- TanStack Queries (REAL data from window.gitAPI) ---
 
-  const { data: statusData, isLoading: isLoadingStatus } = useQuery({
+  const {
+    data: statusData,
+    isLoading: isLoadingStatus,
+    error: statusError,
+    refetch: refetchStatus,
+    isFetching: isFetchingStatus
+  } = useQuery({
     queryKey: ['status', repoPath],
     queryFn: () => window.gitAPI.status(repoPath),
     refetchInterval: 5000 // Auto-refresh status every 5s
@@ -328,8 +338,49 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
     branchColors[b] = GRAPH_COLORS[i % GRAPH_COLORS.length]
   })
 
-  // Repo display name from path
-  const repoName = repoPath.split('/').pop() || repoPath
+  // Repo display name from path; host is set for repos opened over SSH
+  const repoName = repoDisplayName(repoPath)
+  const remoteHost = repoHostLabel(repoPath)
+
+  // A remote repo whose host can't be reached would otherwise render an
+  // empty, half-broken view — show what went wrong and a way out instead.
+  if (remoteHost && statusError && !statusData) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#0f0f12]">
+        <div className={cn('absolute top-0 left-0 right-0 h-10', DRAG_REGION)} />
+        <div className="flex max-w-md flex-col items-center gap-4 px-8 text-center">
+          <Server className="h-10 w-10 text-rose-400" />
+          <h1 className="text-lg font-semibold text-white">Can&apos;t reach {remoteHost}</h1>
+          <p className="break-words text-xs text-slate-400">
+            {statusError instanceof Error ? statusError.message : String(statusError)}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setCurrentRepoPath(null)}
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 bg-indigo-500 text-white hover:bg-indigo-600"
+              onClick={() => refetchStatus()}
+              disabled={isFetchingStatus}
+            >
+              {isFetchingStatus ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const viewingCommit = viewingCommitHash
     ? logData?.all?.find((c: any) => c.hash === viewingCommitHash)
@@ -428,6 +479,15 @@ export default function RepositoryView({ repoPath }: RepositoryViewProps) {
               </>
             )}
           </div>
+          {remoteHost && (
+            <span
+              className="flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300"
+              title={`Remote repository on ${remoteHost}`}
+            >
+              <Server className="h-3 w-3" />
+              {remoteHost}
+            </span>
+          )}
           <span className="text-xs text-slate-500 truncate max-w-[180px]" title={repoPath}>
             {repoName}
           </span>

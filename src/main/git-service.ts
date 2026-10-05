@@ -1,6 +1,9 @@
 import { simpleGit, SimpleGit, StatusResult, LogResult } from 'simple-git'
 import { readdir } from 'fs/promises'
-import { join } from 'path'
+import { homedir } from 'os'
+import { join, posix } from 'path'
+import type { RepoLocation } from '../shared/repo-location'
+import { runRemote, shellQuote, trackHost } from './ssh'
 
 export interface DirEntry {
   name: string
@@ -11,13 +14,39 @@ export interface DirEntry {
 
 export class Repository {
   private git: SimpleGit
+  /** Absolute repo root — on the remote machine for SSH repos. */
+  public path: string
+  /** Set for repos on a remote machine; every git call then runs over ssh. */
+  private sshHost: string | null
 
-  constructor(
-    public path: string,
-    bundledGitPath?: string
-  ) {
+  constructor(location: RepoLocation, bundledGitPath?: string) {
+    this.path = location.path
+    this.sshHost = location.kind === 'ssh' ? location.host : null
+
+    if (location.kind === 'ssh') {
+      trackHost(location.host)
+      // simple-git spawns our shim (Electron running as plain Node) as if it
+      // were git; the shim forwards argv over ssh to `git` in the remote repo.
+      // baseDir only needs to exist locally — the real cwd is GOT_SSH_CWD.
+      this.git = simpleGit({
+        baseDir: homedir(),
+        binary: [process.execPath, join(__dirname, 'ssh-git-shim.js')],
+        // Install paths can contain spaces, which simple-git's binary check rejects
+        unsafe: { allowUnsafeCustomBinary: true },
+        maxConcurrentProcesses: 6,
+        config: []
+      })
+      this.git.env({
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        GOT_SSH_HOST: location.host,
+        GOT_SSH_CWD: location.path
+      })
+      return
+    }
+
     this.git = simpleGit({
-      baseDir: path,
+      baseDir: location.path,
       binary: bundledGitPath || 'git',
       maxConcurrentProcesses: 6,
       config: []
@@ -131,8 +160,12 @@ export class Repository {
   /** Lists one directory's immediate children (lazy — callers fetch deeper
    *  levels on demand as folders are expanded), sorted directories-first. */
   async listDirectory(relativePath = ''): Promise<DirEntry[]> {
-    const dirPath = join(this.path, relativePath)
-    const entries = await readdir(dirPath, { withFileTypes: true })
+    const entries = this.sshHost
+      ? await this.listRemoteDirectory(this.sshHost, relativePath)
+      : (await readdir(join(this.path, relativePath), { withFileTypes: true })).map((e) => ({
+          name: e.name,
+          isDirectory: e.isDirectory()
+        }))
     const visible = entries.filter((e) => e.name !== '.git')
     if (visible.length === 0) return []
 
@@ -143,13 +176,30 @@ export class Repository {
       .map((e, i) => ({
         name: e.name,
         path: relPaths[i],
-        isDirectory: e.isDirectory(),
+        isDirectory: e.isDirectory,
         isIgnored: ignored.has(relPaths[i])
       }))
       .sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
         return a.name.localeCompare(b.name)
       })
+  }
+
+  /** `ls -p` marks directories with a trailing slash. */
+  private async listRemoteDirectory(
+    host: string,
+    relativePath: string
+  ): Promise<{ name: string; isDirectory: boolean }[]> {
+    const dirPath = posix.join(this.path, relativePath)
+    const output = await runRemote(host, `cd ${shellQuote(dirPath)} && ls -A1p`)
+    return output
+      .split('\n')
+      .filter(Boolean)
+      .map((line) =>
+        line.endsWith('/')
+          ? { name: line.slice(0, -1), isDirectory: true }
+          : { name: line, isDirectory: false }
+      )
   }
 
   async getCommitDiff(hash: string): Promise<string> {

@@ -14,6 +14,24 @@ declare global {
       getRecentRepos: () => Promise<string[]>
       getLastRepoPath: () => Promise<string | null>
 
+      // Remote (SSH) repositories — opened repos use `ssh://host/path` as repoPath
+      getRemoteHosts: () => Promise<string[]>
+      connectRemote: (host: string) => Promise<{ ok: true } | { error: string }>
+      listRemoteDirectory: (
+        host: string,
+        path?: string
+      ) => Promise<
+        | {
+            path: string
+            entries: Array<{ name: string; isDirectory: boolean; isRepo: boolean }>
+          }
+        | { error: string }
+      >
+      openRemoteRepository: (
+        host: string,
+        path: string
+      ) => Promise<{ path: string } | { error: string; path: string }>
+
       // Git operations
       status: (repoPath: string) => Promise<any>
       log: (repoPath: string, options?: any) => Promise<any>

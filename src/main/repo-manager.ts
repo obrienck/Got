@@ -1,13 +1,15 @@
 import { Repository } from './git-service'
+import { parseRepoLocation } from '../shared/repo-location'
 
 export class RepoManager {
   private repos = new Map<string, Repository>()
 
-  getRepo(path: string): Repository {
-    if (!this.repos.has(path)) {
-      this.repos.set(path, new Repository(path))
+  /** `location` is a local path or an `ssh://host/path` string (see repo-location). */
+  getRepo(location: string): Repository {
+    if (!this.repos.has(location)) {
+      this.repos.set(location, new Repository(parseRepoLocation(location)))
     }
-    return this.repos.get(path)!
+    return this.repos.get(location)!
   }
 }
 

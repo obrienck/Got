@@ -15,6 +15,14 @@ export const gitAPI = {
   getRecentRepos: () => ipcRenderer.invoke('git:getRecentRepos'),
   getLastRepoPath: () => ipcRenderer.invoke('git:getLastRepoPath'),
 
+  // --- Remote (SSH) repositories ---
+  getRemoteHosts: () => ipcRenderer.invoke('remote:getHosts'),
+  connectRemote: (host: string) => ipcRenderer.invoke('remote:connect', host),
+  listRemoteDirectory: (host: string, path?: string) =>
+    ipcRenderer.invoke('remote:listDirectory', host, path),
+  openRemoteRepository: (host: string, path: string) =>
+    ipcRenderer.invoke('remote:openRepository', host, path),
+
   // --- Git operations ---
   status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
   log: (repoPath: string, options?: any) => ipcRenderer.invoke('git:log', repoPath, options),

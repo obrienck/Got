@@ -3,9 +3,11 @@
 // Also handles Cmd/Ctrl+O keyboard shortcut to open repository dialog
 
 import { useState, useEffect, useCallback } from 'react'
-import { FolderOpen, FolderGit2, CloudDownload, FolderPlus, X, Loader2 } from 'lucide-react'
+import { FolderOpen, FolderGit2, CloudDownload, FolderPlus, Server, X, Loader2 } from 'lucide-react'
 import { useRepoContext } from '../src/context/RepoContext'
 import RepositoryView from './RepositoryView'
+import RemoteOpenDialog from '../src/components/RemoteOpenDialog'
+import { parseRepoLocation, repoDisplayName, repoHostLabel } from '../../shared/repo-location'
 import gotLogo from '../src/assets/got-logo-transparent.png'
 import { DRAG_REGION } from '../src/lib/platform'
 
@@ -20,6 +22,7 @@ function WelcomeOpenScreen() {
   const [isInitializing, setIsInitializing] = useState(false)
   const [showCloneInput, setShowCloneInput] = useState(false)
   const [cloneUrl, setCloneUrl] = useState('')
+  const [showRemoteDialog, setShowRemoteDialog] = useState(false)
 
   // Load recent repos on mount
   useEffect(() => {
@@ -164,7 +167,7 @@ function WelcomeOpenScreen() {
         )}
 
         {/* Quick action cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           <button
             onClick={handleSelectRepo}
             disabled={isBusy}
@@ -252,7 +255,27 @@ function WelcomeOpenScreen() {
             </span>
             <span className="text-xs text-slate-500">Create a new local Git repository</span>
           </button>
+
+          <button
+            onClick={() => setShowRemoteDialog(true)}
+            disabled={isBusy}
+            className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-700 bg-slate-800/40 p-6 text-center transition-all hover:border-indigo-500/50 hover:bg-slate-800/60 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Server className="h-8 w-8 text-indigo-400" />
+            <span className="text-sm font-semibold text-white">Open Remote (SSH)</span>
+            <span className="text-xs text-slate-500">Work on a repository on another machine</span>
+          </button>
         </div>
+
+        {showRemoteDialog && (
+          <RemoteOpenDialog
+            onClose={() => setShowRemoteDialog(false)}
+            onOpened={(location) => {
+              setShowRemoteDialog(false)
+              setCurrentRepoPath(location)
+            }}
+          />
+        )}
 
         <p className="mt-3 text-xs text-slate-600 text-center">
           or press{' '}
@@ -270,7 +293,8 @@ function WelcomeOpenScreen() {
             </h2>
             <div className="flex flex-col gap-1">
               {recentRepos.map((repoPath) => {
-                const name = repoPath.split('/').pop() || repoPath
+                const name = repoDisplayName(repoPath)
+                const host = repoHostLabel(repoPath)
                 return (
                   <button
                     key={repoPath}
@@ -282,8 +306,16 @@ function WelcomeOpenScreen() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-200 truncate">{name}</p>
-                      <p className="text-xs text-slate-500 truncate">{repoPath}</p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {parseRepoLocation(repoPath).path}
+                      </p>
                     </div>
+                    {host && (
+                      <span className="flex shrink-0 items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                        <Server className="h-3 w-3" />
+                        {host}
+                      </span>
+                    )}
                   </button>
                 )
               })}

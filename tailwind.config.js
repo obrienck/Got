@@ -25,7 +25,10 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace']
+        mono: ['JetBrains Mono', 'monospace'],
+        pixel: ['"Press Start 2P"', 'monospace'],
+        terminal: ['VT323', 'monospace'],
+        synth: ['Orbitron', 'sans-serif']
       }
     }
   },

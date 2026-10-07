@@ -27,6 +27,61 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+
+  /* 1980s synthwave welcome theme */
+  .crt-scanlines {
+    position: relative;
+  }
+  .crt-scanlines::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.045) 0px,
+      rgba(255, 255, 255, 0.045) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  .synth-grid {
+    background-image:
+      linear-gradient(rgba(0, 240, 255, 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 0, 127, 0.4) 1px, transparent 1px);
+    background-size: 12px 12px;
+    background-position: center;
+    -webkit-mask-image: radial-gradient(circle at center, black 50%, transparent 85%);
+    mask-image: radial-gradient(circle at center, black 50%, transparent 85%);
+  }
+
+  .neon-border-pink {
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+  .neon-border-pink:hover {
+    box-shadow: 0 0 25px rgba(255, 0, 127, 0.5);
+  }
+  .neon-border-cyan {
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+  .neon-border-cyan:hover {
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+  }
+  .neon-border-amber {
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+  .neon-border-amber:hover {
+    box-shadow: 0 0 25px rgba(255, 170, 0, 0.5);
+  }
+  .neon-border-purple {
+    transition: box-shadow 0.3s, border-color 0.3s;
+  }
+  .neon-border-purple:hover {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
+  }
 }
 
 @layer utilities {

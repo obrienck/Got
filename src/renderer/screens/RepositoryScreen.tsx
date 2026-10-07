@@ -8,13 +8,13 @@ import { useRepoContext } from '../src/context/RepoContext'
 import RepositoryView from './RepositoryView'
 import NormalWelcome from '../src/components/welcome/NormalWelcome'
 import SynthWelcome from '../src/components/welcome/SynthWelcome'
-import { useWelcomeTheme } from '../src/lib/welcome-theme'
+import { useAppTheme } from '../src/context/ThemeContext'
 
 // ─── Welcome Open Screen ─────────────────────────────────────────────────────
 
 function WelcomeOpenScreen() {
   const { setCurrentRepoPath } = useRepoContext()
-  const [theme, setTheme] = useWelcomeTheme()
+  const { theme, setTheme } = useAppTheme()
   const [recentRepos, setRecentRepos] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isSelecting, setIsSelecting] = useState(false)

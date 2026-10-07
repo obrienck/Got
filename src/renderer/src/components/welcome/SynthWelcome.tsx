@@ -8,12 +8,12 @@ import RemoteOpenDialog from '../RemoteOpenDialog'
 import ThemeToggle from '../ThemeToggle'
 import { parseRepoLocation, repoDisplayName, repoHostLabel } from '../../../../shared/repo-location'
 import { DRAG_REGION } from '../../lib/platform'
-import type { WelcomeTheme } from '../../lib/welcome-theme'
+import type { AppTheme } from '../../context/ThemeContext'
 import type { WelcomeContentProps } from './types'
 
 interface SynthWelcomeProps extends WelcomeContentProps {
-  theme: WelcomeTheme
-  setTheme: (theme: WelcomeTheme) => void
+  theme: AppTheme
+  setTheme: (theme: AppTheme) => void
 }
 
 export default function SynthWelcome({

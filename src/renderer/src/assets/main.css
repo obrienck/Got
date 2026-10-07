@@ -82,6 +82,32 @@
   .neon-border-purple:hover {
     box-shadow: 0 0 25px rgba(168, 85, 247, 0.5);
   }
+
+  /* Always-on glow for small persistent chrome (badges, icon chips, inputs) —
+     distinct from .neon-border-* above, which only lights up on hover so a
+     grid of large cards doesn't all glow at once. */
+  .neon-glow-pink {
+    box-shadow: 0 0 10px rgba(255, 0, 127, 0.45);
+  }
+  .neon-glow-cyan {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
+  }
+  .neon-glow-green {
+    box-shadow: 0 0 10px rgba(57, 255, 20, 0.45);
+  }
+  .neon-glow-yellow {
+    box-shadow: 0 0 10px rgba(253, 228, 0, 0.45);
+  }
+
+  .neon-text-pink {
+    text-shadow: 0 0 8px rgba(255, 0, 127, 0.8);
+  }
+  .neon-text-cyan {
+    text-shadow: 0 0 8px rgba(0, 240, 255, 0.8);
+  }
+  .neon-text-green {
+    text-shadow: 0 0 8px rgba(57, 255, 20, 0.8);
+  }
 }
 
 @layer utilities {

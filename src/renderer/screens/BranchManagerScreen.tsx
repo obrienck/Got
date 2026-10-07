@@ -23,6 +23,7 @@ import { formatRelativeTime } from '../src/lib/format-time'
 import gotLogo from '../src/assets/got-logo-transparent.png'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 import { repoDisplayName } from '../../shared/repo-location'
+import { useAppTheme } from '../src/context/ThemeContext'
 
 interface BranchManagerScreenProps {
   repoPath: string
@@ -36,6 +37,8 @@ export default function BranchManagerScreen({
   onViewCommit
 }: BranchManagerScreenProps): React.JSX.Element {
   const queryClient = useQueryClient()
+  const { theme } = useAppTheme()
+  const synth = theme === 'synth'
   const [isCreatingBranch, setIsCreatingBranch] = useState(false)
   const [newBranchName, setNewBranchName] = useState('')
 
@@ -109,20 +112,39 @@ export default function BranchManagerScreen({
   }
 
   return (
-    <div className="flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans">
+    <div
+      className={cn(
+        'flex h-screen w-full flex-col',
+        synth ? 'font-mono crt-scanlines text-[#ecdcff]' : 'bg-[#0f0f12] text-slate-300 font-sans'
+      )}
+      style={synth ? { background: '#0d0221' } : undefined}
+    >
       {/* Header — draggable (custom title bar replaces the native one on mac) */}
       <header
         className={cn(
-          'h-14 border-b border-[#2d2d35] bg-[#1a1a1f] flex items-center justify-between px-4 shrink-0',
-          DRAG_REGION
+          'h-14 flex items-center justify-between px-4 shrink-0',
+          DRAG_REGION,
+          synth ? '' : 'border-b border-[#2d2d35] bg-[#1a1a1f]'
         )}
+        style={
+          synth
+            ? {
+                background: '#140727',
+                borderBottom: '2px solid #ff007f',
+                boxShadow: '0 4px 20px rgba(255,0,127,0.2)'
+              }
+            : undefined
+        }
       >
         <div className={cn('flex items-center gap-4', IS_MAC && 'pl-16')}>
           <button
             onClick={onBack}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors',
-              NO_DRAG
+              'flex items-center justify-center h-7 w-7 rounded transition-colors',
+              NO_DRAG,
+              synth
+                ? 'text-[#00f0ff] hover:bg-[#26193a] hover:text-white'
+                : 'hover:bg-white/5 text-slate-400 hover:text-white'
             )}
             title="Back to repository"
           >
@@ -130,10 +152,24 @@ export default function BranchManagerScreen({
           </button>
           <div className="flex items-center gap-2">
             <img src={gotLogo} alt="" className="h-6 w-6" />
-            <span className="font-semibold text-slate-100">Got</span>
+            <span
+              className={cn(
+                'font-semibold',
+                synth ? 'text-[#ffd9e1] neon-text-pink' : 'text-slate-100'
+              )}
+            >
+              Got
+            </span>
           </div>
-          <div className="h-4 w-px bg-[#33333d]" />
-          <span className="text-xs text-slate-400 font-mono bg-white/5 px-2 py-1 rounded">
+          <div className={cn('h-4 w-px', synth ? 'bg-[#5c3f46]' : 'bg-[#33333d]')} />
+          <span
+            className={cn(
+              'text-xs font-mono px-2 py-1 rounded',
+              synth
+                ? 'bg-[#211536] text-[#00f0ff] border border-[#00f0ff]/40'
+                : 'text-slate-400 bg-white/5'
+            )}
+          >
             repo: {repoName}
           </span>
         </div>
@@ -142,8 +178,11 @@ export default function BranchManagerScreen({
             disabled
             title="Coming soon"
             className={cn(
-              'px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed',
-              NO_DRAG
+              'px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 cursor-not-allowed',
+              NO_DRAG,
+              synth
+                ? 'bg-[#211536] border border-[#3c2e50] text-[#5c3f46]'
+                : 'bg-white/5 border border-[#33333d] text-slate-500'
             )}
           >
             <GitMerge className="w-3.5 h-3.5" />
@@ -153,8 +192,11 @@ export default function BranchManagerScreen({
             disabled
             title="Coming soon"
             className={cn(
-              'px-3 py-1.5 text-xs font-medium rounded bg-white/5 border border-[#33333d] flex items-center gap-2 text-slate-500 cursor-not-allowed',
-              NO_DRAG
+              'px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 cursor-not-allowed',
+              NO_DRAG,
+              synth
+                ? 'bg-[#211536] border border-[#3c2e50] text-[#5c3f46]'
+                : 'bg-white/5 border border-[#33333d] text-slate-500'
             )}
           >
             <GitPullRequestArrow className="w-3.5 h-3.5" />
@@ -173,16 +215,22 @@ export default function BranchManagerScreen({
                 }}
                 placeholder="new-branch-name"
                 className={cn(
-                  'h-8 w-40 rounded bg-[#0f0f12] border border-[#33333d] px-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500',
-                  NO_DRAG
+                  'h-8 w-40 rounded px-2 text-xs focus:outline-none focus:ring-1',
+                  NO_DRAG,
+                  synth
+                    ? 'bg-[#140727] border border-[#ff007f]/50 text-[#00f0ff] focus:ring-[#00f0ff]'
+                    : 'bg-[#0f0f12] border border-[#33333d] text-slate-200 focus:ring-indigo-500'
                 )}
               />
               <button
                 onClick={submitNewBranch}
                 disabled={!newBranchName.trim() || createBranchMutation.isPending}
                 className={cn(
-                  'h-8 px-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs disabled:opacity-50',
-                  NO_DRAG
+                  'h-8 px-2 rounded text-white text-xs disabled:opacity-50',
+                  NO_DRAG,
+                  synth
+                    ? 'bg-gradient-to-r from-[#ff007f] to-[#ba005b] hover:brightness-125'
+                    : 'bg-indigo-600 hover:bg-indigo-500'
                 )}
               >
                 {createBranchMutation.isPending ? (
@@ -196,8 +244,11 @@ export default function BranchManagerScreen({
             <button
               onClick={() => setIsCreatingBranch(true)}
               className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition-colors flex items-center gap-2',
-                NO_DRAG
+                'px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-2 text-white',
+                NO_DRAG,
+                synth
+                  ? 'bg-gradient-to-r from-[#ff007f] to-[#ba005b] hover:brightness-125 shadow-lg shadow-[#ff007f]/30'
+                  : 'bg-indigo-600 hover:bg-indigo-500'
               )}
             >
               <Plus className="w-3.5 h-3.5" />
@@ -210,15 +261,28 @@ export default function BranchManagerScreen({
       {/* Main content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 border-r border-[#2d2d35] bg-[#1a1a1f] flex flex-col shrink-0">
+        <aside
+          className={cn(
+            'w-64 flex flex-col shrink-0',
+            synth ? '' : 'border-r border-[#2d2d35] bg-[#1a1a1f]'
+          )}
+          style={synth ? { background: '#140727', borderRight: '1px solid #3c2e50' } : undefined}
+        >
           <div className="p-4 space-y-6 overflow-y-auto">
             {/* Local Branches */}
             <section>
               <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <h3
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider',
+                    synth ? 'text-[#00f0ff] neon-text-cyan' : 'text-slate-500'
+                  )}
+                >
                   Local Branches
                 </h3>
-                <span className="text-[10px] text-slate-600">{locals.length}</span>
+                <span className={cn('text-[10px]', synth ? 'text-[#5c3f46]' : 'text-slate-600')}>
+                  {locals.length}
+                </span>
               </div>
               <ul className="space-y-0.5">
                 {locals.map((branch) => {
@@ -229,10 +293,14 @@ export default function BranchManagerScreen({
                         disabled={isActive || checkoutMutation.isPending}
                         onClick={() => checkoutMutation.mutate(branch)}
                         className={cn(
-                          'w-full flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors',
+                          'w-full flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors border',
                           isActive
-                            ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                            : 'hover:bg-white/5 text-slate-400 border border-transparent'
+                            ? synth
+                              ? 'bg-[#ff007f]/20 text-[#ffb1c4] border-[#ff007f]/60 neon-glow-pink font-bold'
+                              : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                            : synth
+                              ? 'text-[#ecdcff]/70 hover:bg-[#26193a] hover:text-[#00f0ff] border-transparent'
+                              : 'hover:bg-white/5 text-slate-400 border-transparent'
                         )}
                       >
                         <div className="flex items-center gap-2 truncate">
@@ -241,13 +309,24 @@ export default function BranchManagerScreen({
                             {branch}
                           </span>
                         </div>
-                        {isActive && <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                        {isActive && (
+                          <Check
+                            className={cn(
+                              'w-3.5 h-3.5 shrink-0',
+                              synth ? 'text-[#39ff14]' : 'text-emerald-500'
+                            )}
+                          />
+                        )}
                       </button>
                     </li>
                   )
                 })}
                 {locals.length === 0 && (
-                  <p className="text-xs text-slate-600 px-1 py-1">No local branches</p>
+                  <p
+                    className={cn('text-xs px-1 py-1', synth ? 'text-[#5c3f46]' : 'text-slate-600')}
+                  >
+                    No local branches
+                  </p>
                 )}
               </ul>
             </section>
@@ -255,22 +334,40 @@ export default function BranchManagerScreen({
             {/* Remote Branches */}
             <section>
               <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <h3
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider',
+                    synth ? 'text-[#00f0ff] neon-text-cyan' : 'text-slate-500'
+                  )}
+                >
                   Remote: origin
                 </h3>
-                <span className="text-[10px] text-slate-600">{remotes.length}</span>
+                <span className={cn('text-[10px]', synth ? 'text-[#5c3f46]' : 'text-slate-600')}>
+                  {remotes.length}
+                </span>
               </div>
               <ul className="space-y-0.5">
                 {remotes.map((branch) => (
                   <li key={branch}>
-                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 text-slate-500 rounded-md cursor-pointer transition-colors">
+                    <div
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors',
+                        synth
+                          ? 'hover:bg-[#26193a] text-[#ac878f]'
+                          : 'hover:bg-white/5 text-slate-500'
+                      )}
+                    >
                       <Cloud className="w-4 h-4 shrink-0" />
                       <span className="text-sm truncate">{branch}</span>
                     </div>
                   </li>
                 ))}
                 {remotes.length === 0 && (
-                  <p className="text-xs text-slate-600 px-1 py-1">No remote branches</p>
+                  <p
+                    className={cn('text-xs px-1 py-1', synth ? 'text-[#5c3f46]' : 'text-slate-600')}
+                  >
+                    No remote branches
+                  </p>
                 )}
               </ul>
             </section>
@@ -278,22 +375,40 @@ export default function BranchManagerScreen({
             {/* Tags */}
             <section>
               <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <h3
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider',
+                    synth ? 'text-[#fde400]' : 'text-slate-500'
+                  )}
+                >
                   Tags
                 </h3>
-                <span className="text-[10px] text-slate-600">{tags.length}</span>
+                <span className={cn('text-[10px]', synth ? 'text-[#5c3f46]' : 'text-slate-600')}>
+                  {tags.length}
+                </span>
               </div>
               <ul className="space-y-0.5">
                 {tags.map((tag) => (
                   <li key={tag}>
-                    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 text-slate-500 rounded-md cursor-pointer transition-colors">
+                    <div
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors',
+                        synth
+                          ? 'hover:bg-[#26193a] text-[#ac878f]'
+                          : 'hover:bg-white/5 text-slate-500'
+                      )}
+                    >
                       <Tag className="w-4 h-4 shrink-0" />
                       <span className="text-sm truncate">{tag}</span>
                     </div>
                   </li>
                 ))}
                 {tags.length === 0 && (
-                  <p className="text-xs text-slate-600 px-1 py-1">No tags yet</p>
+                  <p
+                    className={cn('text-xs px-1 py-1', synth ? 'text-[#5c3f46]' : 'text-slate-600')}
+                  >
+                    No tags yet
+                  </p>
                 )}
               </ul>
             </section>
@@ -301,27 +416,50 @@ export default function BranchManagerScreen({
             {/* Stashes */}
             <section>
               <div className="flex items-center justify-between mb-2 px-1">
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <h3
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider',
+                    synth ? 'text-[#00f0ff] neon-text-cyan' : 'text-slate-500'
+                  )}
+                >
                   Stashes
                 </h3>
-                <span className="text-[10px] text-slate-600">{stashes.length}</span>
+                <span className={cn('text-[10px]', synth ? 'text-[#5c3f46]' : 'text-slate-600')}>
+                  {stashes.length}
+                </span>
               </div>
               <ul className="space-y-0.5">
                 {stashes.map((stash) => (
                   <li key={stash.hash}>
-                    <div className="group flex items-center justify-between px-2 py-1.5 hover:bg-white/5 text-slate-500 rounded-md cursor-pointer transition-colors">
+                    <div
+                      className={cn(
+                        'group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer transition-colors',
+                        synth
+                          ? 'hover:bg-[#26193a] text-[#ac878f]'
+                          : 'hover:bg-white/5 text-slate-500'
+                      )}
+                    >
                       <div className="flex items-center gap-2 truncate">
                         <Archive className="w-4 h-4 shrink-0" />
                         <span className="text-sm truncate">{stash.message}</span>
                       </div>
-                      <span className="text-[10px] text-slate-700 hidden group-hover:block shrink-0">
+                      <span
+                        className={cn(
+                          'text-[10px] hidden group-hover:block shrink-0',
+                          synth ? 'text-[#5c3f46]' : 'text-slate-700'
+                        )}
+                      >
                         {formatRelativeTime(stash.date)}
                       </span>
                     </div>
                   </li>
                 ))}
                 {stashes.length === 0 && (
-                  <p className="text-xs text-slate-600 px-1 py-1">No stashes</p>
+                  <p
+                    className={cn('text-xs px-1 py-1', synth ? 'text-[#5c3f46]' : 'text-slate-600')}
+                  >
+                    No stashes
+                  </p>
                 )}
               </ul>
             </section>
@@ -329,16 +467,60 @@ export default function BranchManagerScreen({
         </aside>
 
         {/* Branch detail / history */}
-        <section className="flex-1 flex flex-col bg-[#0f0f12]">
-          <div className="h-10 border-b border-[#2d2d35] flex items-center px-4 justify-between bg-[#0f0f12]/80 shrink-0">
+        <section
+          className={cn('flex-1 flex flex-col', synth ? '' : 'bg-[#0f0f12]')}
+          style={synth ? { background: '#0d0221' } : undefined}
+        >
+          <div
+            className={cn(
+              'h-10 flex items-center px-4 justify-between shrink-0',
+              synth ? '' : 'border-b border-[#2d2d35] bg-[#0f0f12]/80'
+            )}
+            style={synth ? { background: '#190c2d', borderBottom: '1px solid #3c2e50' } : undefined}
+          >
             <div className="flex items-center gap-4">
-              <span className="text-[11px] font-medium text-slate-400">Graph</span>
-              <span className="text-[11px] font-medium text-slate-400">Commit</span>
-              <span className="text-[11px] font-medium text-slate-400">Message</span>
+              <span
+                className={cn(
+                  'text-[11px] font-medium',
+                  synth ? 'text-[#00f0ff] neon-text-cyan' : 'text-slate-400'
+                )}
+              >
+                Graph
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] font-medium',
+                  synth ? 'text-[#ff007f]' : 'text-slate-400'
+                )}
+              >
+                Commit
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] font-medium',
+                  synth ? 'text-[#ff007f]' : 'text-slate-400'
+                )}
+              >
+                Message
+              </span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-[11px] font-medium text-slate-400">Author</span>
-              <span className="text-[11px] font-medium text-slate-400">Date</span>
+              <span
+                className={cn(
+                  'text-[11px] font-medium',
+                  synth ? 'text-[#39ff14]' : 'text-slate-400'
+                )}
+              >
+                Author
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] font-medium',
+                  synth ? 'text-[#dec800]' : 'text-slate-400'
+                )}
+              >
+                Date
+              </span>
             </div>
           </div>
 
@@ -351,15 +533,32 @@ export default function BranchManagerScreen({
                     .map((r: string) => r.trim())
                     .find((r: string) => r.startsWith('origin/'))
                 : null
-              const dotColor = isSynced ? 'bg-slate-600' : 'bg-indigo-500'
-              const lineColor = isSynced ? 'bg-slate-700/30' : 'bg-indigo-500/30'
+              const dotColor = synth
+                ? isSynced
+                  ? 'bg-[#5c3f46]'
+                  : 'bg-[#ff007f]'
+                : isSynced
+                  ? 'bg-slate-600'
+                  : 'bg-indigo-500'
+              const lineColor = synth
+                ? isSynced
+                  ? 'bg-[#3c2e50]/60'
+                  : 'bg-[#ff007f]/30'
+                : isSynced
+                  ? 'bg-slate-700/30'
+                  : 'bg-indigo-500/30'
 
               return (
                 <div
                   key={commit.hash}
                   onDoubleClick={() => onViewCommit(commit.hash)}
                   title="Double-click to view commit details"
-                  className="flex items-center px-4 py-3 border-b border-[#1e1e24] hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                  className={cn(
+                    'flex items-center px-4 py-3 transition-colors group cursor-pointer',
+                    synth
+                      ? 'border-b border-[#3c2e50]/70 hover:bg-[#ff007f]/10'
+                      : 'border-b border-[#1e1e24] hover:bg-white/[0.02]'
+                  )}
                 >
                   <div className="w-12 flex justify-center shrink-0">
                     <div className={cn('w-2 h-2 rounded-full relative', dotColor)}>
@@ -376,21 +575,40 @@ export default function BranchManagerScreen({
                       <code
                         className={cn(
                           'text-[11px] font-mono px-1.5 py-0.5 rounded shrink-0',
-                          isSynced ? 'text-slate-500' : 'text-indigo-400 bg-indigo-500/10'
+                          synth
+                            ? isSynced
+                              ? 'text-[#5c3f46]'
+                              : 'text-[#00f0ff] bg-[#00f0ff]/10'
+                            : isSynced
+                              ? 'text-slate-500'
+                              : 'text-indigo-400 bg-indigo-500/10'
                         )}
                       >
                         {commit.hash?.substring(0, 7)}
                       </code>
                       <div className="flex items-center gap-2 min-w-0">
                         {remoteTip && (
-                          <span className="px-1.5 py-0.5 bg-white/5 text-slate-400 text-[10px] rounded border border-[#33333d] shrink-0">
+                          <span
+                            className={cn(
+                              'px-1.5 py-0.5 text-[10px] rounded border shrink-0',
+                              synth
+                                ? 'bg-[#26193a] text-[#ac878f] border-[#3c2e50]'
+                                : 'bg-white/5 text-slate-400 border-[#33333d]'
+                            )}
+                          >
                             {remoteTip}
                           </span>
                         )}
                         <span
                           className={cn(
                             'min-w-0 flex-1 truncate text-sm',
-                            isSynced ? 'text-slate-400 italic' : 'text-slate-200 font-medium'
+                            synth
+                              ? isSynced
+                                ? 'text-[#ac878f] italic'
+                                : 'text-[#ecdcff] font-medium'
+                              : isSynced
+                                ? 'text-slate-400 italic'
+                                : 'text-slate-200 font-medium'
                           )}
                         >
                           {commit.message}
@@ -407,11 +625,21 @@ export default function BranchManagerScreen({
                         >
                           {initialsFor(commit.author_name || '?')}
                         </div>
-                        <span className="text-xs text-slate-400 whitespace-nowrap">
+                        <span
+                          className={cn(
+                            'text-xs whitespace-nowrap',
+                            synth ? 'text-[#39ff14]' : 'text-slate-400'
+                          )}
+                        >
                           {commit.author_name}
                         </span>
                       </div>
-                      <span className="text-xs text-slate-500 w-24 text-right italic whitespace-nowrap">
+                      <span
+                        className={cn(
+                          'text-xs w-24 text-right italic whitespace-nowrap',
+                          synth ? 'text-[#dec800]' : 'text-slate-500'
+                        )}
+                      >
                         {formatRelativeTime(commit.date)}
                       </span>
                     </div>
@@ -420,15 +648,33 @@ export default function BranchManagerScreen({
               )
             })}
             {commits.length === 0 && (
-              <p className="text-sm text-slate-600 px-4 py-6 text-center">No commits yet</p>
+              <p
+                className={cn(
+                  'text-sm px-4 py-6 text-center',
+                  synth ? 'text-[#5c3f46]' : 'text-slate-600'
+                )}
+              >
+                No commits yet
+              </p>
             )}
           </div>
 
           {/* Status bar */}
-          <footer className="h-8 border-t border-[#2d2d35] flex items-center px-4 justify-between bg-[#1a1a1f] shrink-0">
-            <div className="flex items-center gap-4 text-[10px] font-medium text-slate-500">
+          <footer
+            className={cn(
+              'h-8 flex items-center px-4 justify-between shrink-0',
+              synth ? '' : 'border-t border-[#2d2d35] bg-[#1a1a1f]'
+            )}
+            style={synth ? { background: '#140727', borderTop: '1px solid #3c2e50' } : undefined}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-4 text-[10px] font-medium',
+                synth ? 'text-[#ac878f]' : 'text-slate-500'
+              )}
+            >
               <div className="flex items-center gap-1">
-                <Cloud className="w-3 h-3 text-emerald-500" />
+                <Cloud className={cn('w-3 h-3', synth ? 'text-[#39ff14]' : 'text-emerald-500')} />
                 <span>
                   {ahead === 0 && behind === 0
                     ? tracking
@@ -437,13 +683,20 @@ export default function BranchManagerScreen({
                     : `${ahead} ahead, ${behind} behind${tracking ? ` ${tracking}` : ''}`}
                 </span>
               </div>
-              <div className="h-3 w-px bg-[#2d2d35]" />
+              <div className={cn('h-3 w-px', synth ? 'bg-[#3c2e50]' : 'bg-[#2d2d35]')} />
               <span>{filesChanged} Files Changed</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                <span className="text-[10px] text-slate-400">{currentBranch}</span>
+                <div
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full',
+                    synth ? 'bg-[#ff007f]' : 'bg-indigo-500'
+                  )}
+                />
+                <span className={cn('text-[10px]', synth ? 'text-[#ecdcff]' : 'text-slate-400')}>
+                  {currentBranch}
+                </span>
               </div>
             </div>
           </footer>

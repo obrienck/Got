@@ -10,6 +10,7 @@ import { initialsFor, avatarColorFor } from '../src/lib/avatar'
 import { parseDiff } from '../src/lib/diff-parser'
 import { IS_MAC, DRAG_REGION, NO_DRAG } from '../src/lib/platform'
 import DiffView from '../src/components/DiffView'
+import { useAppTheme } from '../src/context/ThemeContext'
 
 interface CommitDetailScreenProps {
   repoPath: string
@@ -40,6 +41,8 @@ export default function CommitDetailScreen({
   onBack
 }: CommitDetailScreenProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const { theme } = useAppTheme()
+  const synth = theme === 'synth'
 
   const { data: rawDiff, isLoading } = useQuery({
     queryKey: ['commitDiff', repoPath, commit.hash],
@@ -59,31 +62,67 @@ export default function CommitDetailScreen({
   }
 
   return (
-    <div className="flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans">
+    <div
+      className={cn(
+        'flex h-screen w-full flex-col',
+        synth ? 'font-mono crt-scanlines text-[#ecdcff]' : 'bg-[#0f0f12] text-slate-300 font-sans'
+      )}
+      style={synth ? { background: '#0d0221' } : undefined}
+    >
       {/* Header — draggable (custom title bar replaces the native one on mac) */}
       <header
-        className={cn('border-b border-[#2d2d35] bg-[#1a1a1f] px-4 py-3 shrink-0', DRAG_REGION)}
+        className={cn(
+          'px-4 py-3 shrink-0',
+          DRAG_REGION,
+          synth ? '' : 'border-b border-[#2d2d35] bg-[#1a1a1f]'
+        )}
+        style={
+          synth
+            ? {
+                background: '#140727',
+                borderBottom: '2px solid #ff007f',
+                boxShadow: '0 4px 20px rgba(255,0,127,0.2)'
+              }
+            : undefined
+        }
       >
         <div className={cn('flex items-center gap-3 text-sm', IS_MAC && 'pl-16')}>
           <button
             onClick={onBack}
             className={cn(
-              'flex items-center justify-center h-7 w-7 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors',
-              NO_DRAG
+              'flex items-center justify-center h-7 w-7 rounded transition-colors',
+              NO_DRAG,
+              synth
+                ? 'text-[#00f0ff] hover:bg-[#26193a] hover:text-white'
+                : 'hover:bg-white/5 text-slate-400 hover:text-white'
             )}
             title="Back to repository"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <span className="text-slate-500">Got /</span>
-          <span className="font-mono text-slate-400">{commit.hash.substring(0, 7)}</span>
+          <span className={synth ? 'text-[#ac878f]' : 'text-slate-500'}>Got /</span>
+          <span className={cn('font-mono', synth ? 'text-[#00f0ff]' : 'text-slate-400')}>
+            {commit.hash.substring(0, 7)}
+          </span>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         {/* Commit metadata */}
-        <div className="border-b border-[#2d2d35] px-6 py-5">
-          <h1 className="text-xl font-semibold text-white mb-3">{summary}</h1>
+        <div
+          className={cn(
+            'px-6 py-5',
+            synth ? 'border-b border-[#ff007f]/40' : 'border-b border-[#2d2d35]'
+          )}
+        >
+          <h1
+            className={cn(
+              'text-xl font-semibold mb-3',
+              synth ? 'text-white neon-text-pink' : 'text-white'
+            )}
+          >
+            {summary}
+          </h1>
           <div className="flex items-center gap-3 text-sm mb-3">
             <div
               className={cn(
@@ -93,17 +132,27 @@ export default function CommitDetailScreen({
             >
               {initialsFor(commit.author_name || '?')}
             </div>
-            <span className="font-medium text-slate-200">{commit.author_name}</span>
-            <span className="text-slate-500">
-              committed on <span className="text-slate-300">{formatFullDate(commit.date)}</span>
+            <span className={cn('font-medium', synth ? 'text-[#ecdcff]' : 'text-slate-200')}>
+              {commit.author_name}
+            </span>
+            <span className={synth ? 'text-[#ac878f]' : 'text-slate-500'}>
+              committed on{' '}
+              <span className={synth ? 'text-[#ffd9e1]' : 'text-slate-300'}>
+                {formatFullDate(commit.date)}
+              </span>
             </span>
             <button
               onClick={copySha}
-              className="flex items-center gap-1.5 font-mono text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded border border-[#2d2d35] text-slate-400 transition-colors"
+              className={cn(
+                'flex items-center gap-1.5 font-mono text-xs px-2 py-1 rounded border transition-colors',
+                synth
+                  ? 'bg-[#140727] hover:bg-[#26193a] border-[#3c2e50] text-[#00f0ff]'
+                  : 'bg-white/5 hover:bg-white/10 border-[#2d2d35] text-slate-400'
+              )}
               title="Copy full SHA"
             >
               {copied ? (
-                <Check className="w-3 h-3 text-emerald-400" />
+                <Check className={cn('w-3 h-3', synth ? 'text-[#39ff14]' : 'text-emerald-400')} />
               ) : (
                 <Copy className="w-3 h-3" />
               )}
@@ -111,7 +160,12 @@ export default function CommitDetailScreen({
             </button>
           </div>
           {description && (
-            <p className="text-sm text-slate-400 leading-relaxed max-w-3xl whitespace-pre-wrap">
+            <p
+              className={cn(
+                'text-sm leading-relaxed max-w-3xl whitespace-pre-wrap',
+                synth ? 'text-[#ac878f]' : 'text-slate-400'
+              )}
+            >
               {description}
             </p>
           )}

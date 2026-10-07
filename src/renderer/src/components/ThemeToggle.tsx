@@ -3,11 +3,11 @@
 // toggle, but swapping the whole welcome screen's skin instead of a palette.
 
 import { Gamepad2 } from 'lucide-react'
-import type { WelcomeTheme } from '../lib/welcome-theme'
+import type { AppTheme } from '../context/ThemeContext'
 
 interface ThemeToggleProps {
-  theme: WelcomeTheme
-  onChange: (theme: WelcomeTheme) => void
+  theme: AppTheme
+  onChange: (theme: AppTheme) => void
 }
 
 export default function ThemeToggle({ theme, onChange }: ThemeToggleProps): React.JSX.Element {

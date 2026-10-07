@@ -1,0 +1,659 @@
+// src/renderer/src/components/repository/NormalRepositoryView.tsx
+// The standard (non-synthwave) repository view: top bar + left sidebar +
+// commit graph + right panel.
+
+import React from 'react'
+import {
+  GitPullRequest,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  Settings,
+  Plus,
+  Check,
+  Loader2,
+  Server
+} from 'lucide-react'
+import { cn } from '../../lib/cn'
+import { initialsFor, avatarColorFor } from '../../lib/avatar'
+import { IS_MAC, DRAG_REGION, NO_DRAG } from '../../lib/platform'
+import { getStatusInfo } from '../../lib/file-status'
+import FileTree from '../FileTree'
+import DiffView from '../DiffView'
+import BlameView from '../BlameView'
+import ThemeToggle from '../ThemeToggle'
+import gotLogo from '../../assets/got-logo-transparent.png'
+import { laneX, edgeY, edgePath, ROW_HEIGHT } from './graph-geometry'
+import type { RepositoryViewContentProps } from './types'
+
+// --- Inline UI Components (shadcn-like) ---
+
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    variant?: 'default' | 'ghost' | 'outline' | 'secondary'
+    size?: 'default' | 'sm' | 'icon'
+  }
+>(({ className, variant = 'default', size = 'default', ...props }, ref) => {
+  const variants = {
+    default: 'bg-indigo-500 text-white hover:bg-indigo-600 shadow-sm',
+    ghost: 'hover:bg-slate-800 text-slate-300 hover:text-white',
+    outline: 'border border-slate-700 bg-transparent hover:bg-slate-800 text-slate-300',
+    secondary: 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+  }
+  const sizes = {
+    default: 'h-9 px-4 py-2',
+    sm: 'h-8 rounded-md px-3 text-xs',
+    icon: 'h-8 w-8 justify-center'
+  }
+  return (
+    <button
+      ref={ref}
+      className={cn(
+        'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 disabled:pointer-events-none disabled:opacity-50',
+        variants[variant],
+        sizes[size],
+        className
+      )}
+      {...props}
+    />
+  )
+})
+Button.displayName = 'Button'
+
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => (
+    <input
+      ref={ref}
+      className={cn(
+        'flex h-9 w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-1 text-sm text-slate-200 shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50',
+        className
+      )}
+      {...props}
+    />
+  )
+)
+Input.displayName = 'Input'
+
+const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className, ...props }, ref) => (
+  <textarea
+    ref={ref}
+    className={cn(
+      'flex min-h-[60px] w-full rounded-md border border-slate-700 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 shadow-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50',
+      className
+    )}
+    {...props}
+  />
+))
+Textarea.displayName = 'Textarea'
+
+const Checkbox = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => (
+    <div className="flex items-center">
+      <input
+        type="checkbox"
+        ref={ref}
+        className={cn(
+          'peer h-4 w-4 shrink-0 rounded-sm border border-slate-500 bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 checked:bg-indigo-500 checked:text-white',
+          className
+        )}
+        {...props}
+      />
+    </div>
+  )
+)
+Checkbox.displayName = 'Checkbox'
+
+const ScrollArea = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn('overflow-y-auto overflow-x-hidden', className)}>{children}</div>
+)
+
+export default function NormalRepositoryView(props: RepositoryViewContentProps): React.JSX.Element {
+  const {
+    theme,
+    setTheme,
+    onSwitchRepo,
+    repoName,
+    remoteHost,
+    currentBranch,
+    tracking,
+    summary,
+    setSummary,
+    description,
+    setDescription,
+    summaryRef,
+    commitMutation,
+    activeTab,
+    setActiveTab,
+    repoPath,
+    selectedFilePath,
+    setSelectedFilePath,
+    statusByPath,
+    branches,
+    branchColors,
+    checkoutMutation,
+    setShowBranchManager,
+    pullMutation,
+    pushMutation,
+    isLoadingLog,
+    logData,
+    graphCommits,
+    graphLayout,
+    graphWidth,
+    selectedCommit,
+    setSelectedCommit,
+    setViewingCommitHash,
+    filesTabDiff,
+    isLoadingFilesTabDiff,
+    blameLines,
+    isLoadingBlame,
+    isLoadingStatus,
+    stagedFiles,
+    allUnstaged,
+    stageMutation,
+    unstageMutation,
+    userConfig
+  } = props
+
+  return (
+    <div className="dark flex h-screen w-full flex-col bg-[#0f0f12] text-slate-300 font-sans selection:bg-indigo-500/30">
+      {/* Top Bar — draggable (custom title bar replaces the native one on mac) */}
+      <div
+        className={cn(
+          'flex h-14 shrink-0 items-center justify-between border-b border-[#2d2d35] bg-[#1a1a1f] px-4 shadow-sm z-10',
+          DRAG_REGION
+        )}
+      >
+        <div className={cn('flex items-center gap-6', IS_MAC && 'pl-16')}>
+          <button
+            onClick={onSwitchRepo}
+            title="Switch repository"
+            className={cn(
+              'flex items-center gap-2 font-bold text-white cursor-pointer hover:bg-white/5 px-2 py-1 rounded transition-colors',
+              NO_DRAG
+            )}
+          >
+            <img src={gotLogo} alt="" className="h-6 w-6" />
+            Got
+          </button>
+          <div className="flex items-center gap-1.5 border-l border-[#33333d] pl-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('gap-2 px-2.5 hover:bg-slate-800', NO_DRAG)}
+              onClick={() => pullMutation.mutate()}
+              disabled={pullMutation.isPending}
+            >
+              {pullMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowDownToLine className="h-4 w-4" />
+              )}
+              Pull
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('gap-2 px-2.5 hover:bg-slate-800', NO_DRAG)}
+              onClick={() => pushMutation.mutate()}
+              disabled={pushMutation.isPending}
+            >
+              {pushMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUpToLine className="h-4 w-4" />
+              )}
+              Push
+            </Button>
+            <Button
+              size="sm"
+              className={cn(
+                'ml-2 gap-1.5 bg-indigo-500 hover:bg-indigo-600 text-white font-medium border-0 px-3',
+                NO_DRAG
+              )}
+              onClick={() => setShowBranchManager(true)}
+            >
+              <GitPullRequest className="h-4 w-4" /> Branch
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-sm">
+          <div className={NO_DRAG}>
+            <ThemeToggle theme={theme} onChange={setTheme} />
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-[#33333d] bg-[#0f0f12] px-3 py-1 text-xs">
+            <GitPullRequest className="h-3.5 w-3.5 text-indigo-400" />
+            <span className="font-semibold text-white">{currentBranch}</span>
+            {tracking && (
+              <>
+                <span className="text-slate-500">•</span>
+                <span className="text-slate-400">{tracking}</span>
+              </>
+            )}
+          </div>
+          {remoteHost && (
+            <span
+              className="flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-300"
+              title={`Remote repository on ${remoteHost}`}
+            >
+              <Server className="h-3 w-3" />
+              {remoteHost}
+            </span>
+          )}
+          <span className="text-xs text-slate-500 truncate max-w-[180px]" title={repoPath}>
+            {repoName}
+          </span>
+          <Button variant="ghost" size="icon" className={cn('h-8 w-8 hover:bg-slate-800', NO_DRAG)}>
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-[#2d2d35] bg-[#1a1a1f]">
+          <div className="flex h-10 items-center justify-between px-4">
+            <h2 className="text-[11px] font-bold tracking-wider text-slate-500">REPOSITORY</h2>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-white">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <ScrollArea className="flex-1 px-2 pb-4">
+            {/* File Tree — real recursive directory browser, lazily loaded */}
+            <div className="mt-1">
+              <FileTree
+                repoPath={repoPath}
+                statusByPath={statusByPath}
+                onFileClick={setSelectedFilePath}
+                selectedFilePath={selectedFilePath}
+              />
+            </div>
+
+            {/* Local Branches */}
+            <div className="mt-8">
+              <div className="flex h-8 items-center px-2">
+                <h2 className="text-[11px] font-bold tracking-wider text-slate-500">
+                  LOCAL BRANCHES
+                </h2>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {branches.map((branch) => {
+                  const isActive = branch === currentBranch
+                  const color = branchColors[branch] || '#a855f7'
+                  return (
+                    <button
+                      key={branch}
+                      disabled={checkoutMutation.isPending || isActive}
+                      onClick={() => !isActive && checkoutMutation.mutate(branch)}
+                      className={cn(
+                        'group flex items-center justify-between rounded px-2 py-1.5 text-sm transition-colors',
+                        isActive
+                          ? 'bg-indigo-500/10 text-indigo-300 font-medium'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <GitPullRequest className="h-3.5 w-3.5 shrink-0" style={{ color }} />
+                        <span className="truncate">{branch}</span>
+                      </div>
+                      {isActive && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-400" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Center Main Area — Commit Graph */}
+        <div className="flex flex-1 flex-col overflow-hidden bg-[#0f0f12]">
+          {/* Tabs */}
+          <div className="flex h-12 w-full shrink-0 border-b border-[#2d2d35] px-4 font-medium text-sm z-10">
+            {['Graph', 'Files', 'Blame'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'relative flex items-center px-4 transition-colors',
+                  activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                )}
+              >
+                {tab}
+                {activeTab === tab && (
+                  <div className="absolute bottom-0 left-0 h-[2px] w-full bg-indigo-500 rounded-t-full" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 overflow-hidden relative">
+            {activeTab === 'Graph' &&
+              (isLoadingLog ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                    <span className="text-sm text-slate-500">Loading commit history...</span>
+                  </div>
+                </div>
+              ) : (
+                <ScrollArea className="h-full">
+                  {/* Column header */}
+                  <div className="sticky top-0 z-10 flex bg-[#0f0f12]/95 backdrop-blur shadow-[0_1px_0_#2d2d35] text-left text-[13px]">
+                    <div
+                      style={{ width: graphWidth }}
+                      className="shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap"
+                    >
+                      GRAPH
+                    </div>
+                    <div className="flex-1 px-4 py-2 font-semibold text-slate-400">MESSAGE</div>
+                    <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                      AUTHOR
+                    </div>
+                    <div className="w-[140px] shrink-0 px-4 py-2 font-semibold text-slate-400 whitespace-nowrap">
+                      DATE
+                    </div>
+                    <div className="w-[80px] shrink-0 pl-4 pr-6 py-2 font-semibold text-slate-400 whitespace-nowrap text-right">
+                      SHA
+                    </div>
+                  </div>
+
+                  {/* Rows, with the ancestry graph rendered as one SVG overlay behind them */}
+                  <div className="relative font-mono tracking-tight text-[13px]">
+                    <svg
+                      width={graphWidth}
+                      height={graphCommits.length * ROW_HEIGHT}
+                      className="absolute top-0 left-0 pointer-events-none"
+                    >
+                      {graphLayout.edges.map((e, i) => (
+                        <path
+                          key={i}
+                          d={edgePath(
+                            laneX(e.fromCol),
+                            edgeY(e.row, e.fromEdge),
+                            laneX(e.toCol),
+                            edgeY(e.row, e.toEdge)
+                          )}
+                          stroke={e.color}
+                          strokeWidth={2}
+                          fill="none"
+                        />
+                      ))}
+                      {graphLayout.nodes.map((n) => {
+                        const commit = logData?.all?.[n.row]
+                        const isSelected = !!commit && selectedCommit === commit.hash
+                        return (
+                          <circle
+                            key={n.row}
+                            cx={laneX(n.col)}
+                            cy={edgeY(n.row, 'center')}
+                            r={isSelected ? 5.5 : 4}
+                            fill={n.color}
+                            stroke="#0f0f12"
+                            strokeWidth={2.5}
+                          />
+                        )
+                      })}
+                    </svg>
+
+                    {logData?.all?.map((commit: any) => {
+                      const isSelected = selectedCommit === commit.hash
+                      const commitDate = commit.date
+                        ? new Date(commit.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : ''
+
+                      return (
+                        <div
+                          key={commit.hash}
+                          onClick={() => setSelectedCommit(commit.hash)}
+                          onDoubleClick={() => setViewingCommitHash(commit.hash)}
+                          title="Double-click to view commit details"
+                          style={{ height: ROW_HEIGHT }}
+                          className={cn(
+                            'group flex items-center cursor-pointer transition-colors border-b border-[#1e1e24]',
+                            isSelected ? 'bg-indigo-500/10' : 'hover:bg-white/[0.02]'
+                          )}
+                        >
+                          <div style={{ width: graphWidth }} className="shrink-0 h-full" />
+                          <div className="flex-1 min-w-0 px-4 text-slate-200">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {commit.refs && (
+                                <span
+                                  className={cn(
+                                    'max-w-[160px] shrink-0 truncate rounded px-1.5 py-0.5 text-[10px] font-sans font-bold',
+                                    commit.refs.includes('main') || commit.refs.includes('master')
+                                      ? 'bg-purple-500/20 text-purple-300'
+                                      : commit.refs.includes('feature')
+                                        ? 'bg-cyan-500/20 text-cyan-300'
+                                        : 'bg-rose-500/20 text-rose-300'
+                                  )}
+                                >
+                                  {commit.refs.replace('HEAD -> ', '')}
+                                </span>
+                              )}
+                              <span
+                                className={cn(
+                                  'min-w-0 flex-1 truncate',
+                                  isSelected ? 'text-white' : ''
+                                )}
+                              >
+                                {commit.message}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="w-[140px] shrink-0 px-4 text-slate-400 capitalize whitespace-nowrap truncate">
+                            {commit.author_name}
+                          </div>
+                          <div className="w-[140px] shrink-0 px-4 text-slate-400 whitespace-nowrap">
+                            {commitDate}
+                          </div>
+                          <div className="w-[80px] shrink-0 pl-4 pr-6 text-slate-500 text-right">
+                            {commit.hash?.substring(0, 7)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
+              ))}
+
+            {activeTab === 'Files' && (
+              <ScrollArea className="h-full">
+                <DiffView
+                  files={filesTabDiff}
+                  isLoading={isLoadingFilesTabDiff}
+                  emptyMessage={
+                    selectedCommit
+                      ? 'No changes in this commit'
+                      : 'Select a commit in the Graph tab to see its changed files'
+                  }
+                />
+              </ScrollArea>
+            )}
+
+            {activeTab === 'Blame' && (
+              <ScrollArea className="h-full">
+                <BlameView
+                  lines={blameLines}
+                  isLoading={isLoadingBlame}
+                  filePath={selectedFilePath || undefined}
+                />
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel — Staged/Unstaged + Commit */}
+        <div className="flex h-full w-[320px] shrink-0 flex-col border-l border-[#2d2d35] bg-[#1a1a1f] shadow-xl z-20">
+          <ScrollArea className="flex-1 p-4 pb-0">
+            {/* Staged Section */}
+            <div className="mb-6">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold tracking-wider text-slate-400">
+                  STAGED ({stagedFiles.length})
+                </span>
+                {stagedFiles.length > 0 && (
+                  <button
+                    onClick={() => unstageMutation.mutate(stagedFiles.map((f: any) => f.path))}
+                    disabled={unstageMutation.isPending}
+                    className="text-[11px] font-medium text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"
+                  >
+                    Unstage All
+                  </button>
+                )}
+              </div>
+              {isLoadingStatus ? (
+                <div className="flex items-center gap-2 text-slate-500 text-xs py-2">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                </div>
+              ) : stagedFiles.length === 0 ? (
+                <p className="text-xs text-slate-600 py-1">No staged changes</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {stagedFiles.map((f: any) => {
+                    const info = getStatusInfo(' ', f.index)
+                    return (
+                      <div
+                        key={f.path}
+                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-white/5 transition-colors cursor-pointer text-slate-300"
+                      >
+                        <Checkbox
+                          checked
+                          onChange={() => unstageMutation.mutate([f.path])}
+                          title="Click to unstage"
+                        />
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 items-center justify-center rounded text-[11px] font-bold',
+                            info.bg,
+                            info.text
+                          )}
+                        >
+                          {info.letter}
+                        </span>
+                        <span className="flex-1 truncate group-hover:text-white">{f.path}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Unstaged Section */}
+            <div className="mb-6">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold tracking-wider text-slate-400">
+                  UNSTAGED CHANGES ({allUnstaged.length})
+                </span>
+                {allUnstaged.length > 0 && (
+                  <button
+                    onClick={() => stageMutation.mutate(allUnstaged.map((f: any) => f.path))}
+                    disabled={stageMutation.isPending}
+                    className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
+                  >
+                    Stage All
+                  </button>
+                )}
+              </div>
+              {isLoadingStatus ? (
+                <div className="flex items-center gap-2 text-slate-500 text-xs py-2">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Loading...
+                </div>
+              ) : allUnstaged.length === 0 ? (
+                <p className="text-xs text-slate-600 py-1">Working tree clean</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {allUnstaged.map((f: any) => {
+                    const info = getStatusInfo(f.working_dir, f.index)
+                    return (
+                      <div
+                        key={f.path}
+                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-white/5 transition-colors cursor-pointer text-slate-300"
+                      >
+                        <Checkbox
+                          onChange={() => stageMutation.mutate([f.path])}
+                          title="Click to stage"
+                        />
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold',
+                            info.bg,
+                            info.text
+                          )}
+                        >
+                          {info.letter}
+                        </span>
+                        <span className="flex-1 truncate group-hover:text-white">{f.path}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Commit Area */}
+          <div className="flex flex-col gap-3 p-4 border-t border-[#2d2d35] bg-[#1a1a1f] shrink-0">
+            <h3 className="text-xs font-bold tracking-wider text-slate-400">COMMIT MESSAGE</h3>
+            <div className="flex flex-col gap-2 relative">
+              <Input
+                ref={summaryRef}
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="Commit summary (Cmd+K)"
+                className="bg-[#0f0f12] border-[#33333d] focus-visible:ring-indigo-500 text-[13px]"
+              />
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description (optional)"
+                className="bg-[#0f0f12] border-[#33333d] resize-none h-24 focus-visible:ring-indigo-500 text-[13px]"
+              />
+            </div>
+            <Button
+              className="w-full h-10 gap-2 font-medium"
+              disabled={!summary.trim() || commitMutation.isPending || stagedFiles.length === 0}
+              onClick={() => commitMutation.mutate({ sum: summary, desc: description })}
+            >
+              {commitMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Committing...
+                </>
+              ) : (
+                `Commit ${stagedFiles.length} File${stagedFiles.length !== 1 ? 's' : ''}`
+              )}
+            </Button>
+          </div>
+
+          {/* Committer Profile */}
+          {userConfig?.name && (
+            <div className="flex items-center gap-3 p-3 border-t border-[#2d2d35] bg-[#0f0f12]/40 shrink-0">
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white',
+                  avatarColorFor(userConfig.name)
+                )}
+              >
+                {initialsFor(userConfig.name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium text-white">{userConfig.name}</div>
+                <div className="truncate text-[11px] text-slate-500">{userConfig.email}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,6 +1,6 @@
 // src/renderer/src/components/RemoteOpenDialog.tsx
-// Modal for opening a repo on a remote machine over SSH: pick a host, then
-// browse its filesystem to the repo. Git itself runs on the remote host.
+// Modal for opening a repo inside a Coder workspace: pick a workspace (starting
+// it if needed), then browse its filesystem to the repo. Git runs in the workspace.
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -12,8 +12,11 @@ import {
   ArrowLeft,
   Loader2,
   X,
-  CornerDownLeft
+  CornerDownLeft,
+  RefreshCw,
+  Play
 } from 'lucide-react'
+import type { CoderWorkspace } from '../../../shared/coder-workspace'
 
 interface RemoteEntry {
   name: string
@@ -37,13 +40,23 @@ function joinPath(dir: string, name: string): string {
   return dir.endsWith('/') ? `${dir}${name}` : `${dir}/${name}`
 }
 
+function statusClass(status: string): string {
+  if (status === 'running') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+  if (status === 'failed') return 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+  if (status === 'stopped' || status === 'deleted')
+    return 'border-slate-600 bg-slate-800 text-slate-400'
+  return 'border-amber-500/30 bg-amber-500/10 text-amber-300' // starting, stopping, pending...
+}
+
 export default function RemoteOpenDialog({
   onClose,
   onOpened
 }: RemoteOpenDialogProps): React.JSX.Element {
   const [step, setStep] = useState<'connect' | 'browse'>('connect')
-  const [knownHosts, setKnownHosts] = useState<string[]>([])
-  const [host, setHost] = useState('')
+  const [workspaces, setWorkspaces] = useState<CoderWorkspace[] | null>(null)
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false)
+  const [startingName, setStartingName] = useState<string | null>(null)
+  const [host, setHost] = useState('') // the selected workspace target
   const [isConnecting, setIsConnecting] = useState(false)
 
   const [currentDir, setCurrentDir] = useState('')
@@ -53,9 +66,27 @@ export default function RemoteOpenDialog({
   const [isOpening, setIsOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    window.gitAPI.getRemoteHosts().then(setKnownHosts).catch(console.error)
+  const loadWorkspaces = useCallback(async () => {
+    setIsLoadingWorkspaces(true)
+    setError(null)
+    try {
+      const result = await window.gitAPI.getCoderWorkspaces()
+      if ('error' in result) {
+        setError(result.error)
+        return
+      }
+      setWorkspaces(result.workspaces)
+    } catch (err) {
+      setError('Failed to list Coder workspaces.')
+      console.error(err)
+    } finally {
+      setIsLoadingWorkspaces(false)
+    }
   }, [])
+
+  useEffect(() => {
+    loadWorkspaces()
+  }, [loadWorkspaces])
 
   // Escape closes the dialog
   useEffect(() => {
@@ -67,11 +98,11 @@ export default function RemoteOpenDialog({
   }, [onClose])
 
   const listDir = useCallback(
-    async (dir?: string) => {
+    async (dir?: string, target: string = host) => {
       setIsListing(true)
       setError(null)
       try {
-        const result = await window.gitAPI.listRemoteDirectory(host.trim(), dir)
+        const result = await window.gitAPI.listRemoteDirectory(target, dir)
         if ('error' in result) {
           setError(result.error)
           return
@@ -89,32 +120,56 @@ export default function RemoteOpenDialog({
     [host]
   )
 
-  const handleConnect = useCallback(async () => {
-    if (!host.trim()) return
-    setIsConnecting(true)
-    setError(null)
-    try {
-      const result = await window.gitAPI.connectRemote(host.trim())
-      if ('error' in result) {
-        setError(result.error)
-        return
+  const handleConnect = useCallback(
+    async (target: string) => {
+      setHost(target)
+      setIsConnecting(true)
+      setError(null)
+      try {
+        const result = await window.gitAPI.connectRemote(target)
+        if ('error' in result) {
+          setError(result.error)
+          return
+        }
+        setStep('browse')
+        await listDir(undefined, target) // start in the workspace home directory
+      } catch (err) {
+        setError('Failed to connect. Please try again.')
+        console.error(err)
+      } finally {
+        setIsConnecting(false)
       }
-      setStep('browse')
-      await listDir() // start in the remote home directory
-    } catch (err) {
-      setError('Failed to connect. Please try again.')
-      console.error(err)
-    } finally {
-      setIsConnecting(false)
-    }
-  }, [host, listDir])
+    },
+    [listDir]
+  )
+
+  const handleStart = useCallback(
+    async (ws: CoderWorkspace) => {
+      setStartingName(ws.name)
+      setError(null)
+      try {
+        const result = await window.gitAPI.startCoderWorkspace(ws.target)
+        if ('error' in result) {
+          setError(result.error)
+          return
+        }
+        await loadWorkspaces()
+      } catch (err) {
+        setError(`Failed to start ${ws.name}.`)
+        console.error(err)
+      } finally {
+        setStartingName(null)
+      }
+    },
+    [loadWorkspaces]
+  )
 
   const handleOpen = useCallback(
     async (repoPath: string) => {
       setIsOpening(true)
       setError(null)
       try {
-        const result = await window.gitAPI.openRemoteRepository(host.trim(), repoPath)
+        const result = await window.gitAPI.openRemoteRepository(host, repoPath)
         if ('error' in result) {
           setError(
             result.error === 'NOT_A_GIT_REPO'
@@ -153,7 +208,7 @@ export default function RemoteOpenDialog({
                   setStep('connect')
                   setError(null)
                 }}
-                title="Change host"
+                title="Change workspace"
                 className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -161,7 +216,7 @@ export default function RemoteOpenDialog({
             )}
             <Server className="h-5 w-5 text-indigo-400" />
             <span className="text-sm font-semibold text-white">
-              {step === 'connect' ? 'Open Remote Repository' : host.trim()}
+              {step === 'connect' ? 'Open Coder Workspace' : host}
             </span>
           </div>
           <button
@@ -184,37 +239,94 @@ export default function RemoteOpenDialog({
         )}
 
         {step === 'connect' ? (
-          <div className="flex flex-col gap-3 p-5">
-            <label className="text-xs text-slate-400">
-              SSH host — an alias from <code className="text-slate-300">~/.ssh/config</code> or{' '}
-              <code className="text-slate-300">user@hostname</code>
-            </label>
-            <input
-              autoFocus
-              list="got-ssh-hosts"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleConnect()
-              }}
-              placeholder="user@devbox"
-              className="rounded-lg border border-slate-700 bg-[#0f0f12] px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-            <datalist id="got-ssh-hosts">
-              {knownHosts.map((h) => (
-                <option key={h} value={h} />
-              ))}
-            </datalist>
+          <div className="flex min-h-0 flex-col gap-3 p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Your workspaces, via the <code className="text-slate-300">coder</code> CLI
+              </span>
+              <button
+                onClick={loadWorkspaces}
+                disabled={isLoadingWorkspaces || startingName !== null}
+                title="Refresh"
+                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-40"
+              >
+                <RefreshCw className={isLoadingWorkspaces ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+              </button>
+            </div>
+
+            <div className="min-h-[200px] flex-1 overflow-y-auto rounded-lg border border-[#2d2d35] bg-[#0f0f12] py-1">
+              {workspaces === null && isLoadingWorkspaces && (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+                </div>
+              )}
+              {workspaces?.length === 0 && (
+                <p className="px-3 py-6 text-center text-xs text-slate-500">
+                  No workspaces found. Create one in Coder, then refresh.
+                </p>
+              )}
+              {workspaces?.map((ws) => {
+                const isRunning = ws.status === 'running'
+                const isStarting = startingName === ws.name
+                return (
+                  <div
+                    key={ws.target}
+                    className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-slate-800/60"
+                  >
+                    <Server className="h-4 w-4 shrink-0 text-indigo-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-slate-200">
+                        {ws.name}
+                        {ws.agent && <span className="text-slate-500">.{ws.agent}</span>}
+                      </p>
+                      {ws.template && (
+                        <p className="truncate text-[11px] text-slate-500">{ws.template}</p>
+                      )}
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusClass(isStarting ? 'starting' : ws.status)}`}
+                    >
+                      {isStarting ? 'starting' : ws.status}
+                    </span>
+                    {isRunning ? (
+                      <button
+                        onClick={() => handleConnect(ws.target)}
+                        disabled={isConnecting}
+                        className="w-20 shrink-0 rounded-lg bg-indigo-500 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isConnecting && host === ws.target ? (
+                          <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          'Connect'
+                        )}
+                      </button>
+                    ) : ws.status === 'stopped' || ws.status === 'failed' ? (
+                      <button
+                        onClick={() => handleStart(ws)}
+                        disabled={startingName !== null}
+                        className="flex w-20 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-700 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isStarting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Play className="h-3 w-3" /> Start
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="w-20 shrink-0" />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
             <p className="text-[11px] text-slate-500">
-              Key-based authentication (ssh-agent or an IdentityFile) is required.
+              {startingName
+                ? `Starting ${startingName} — this can take a few minutes.`
+                : 'Requires the Coder CLI, signed in with `coder login`.'}
             </p>
-            <button
-              onClick={handleConnect}
-              disabled={!host.trim() || isConnecting}
-              className="mt-1 rounded-lg bg-indigo-500 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isConnecting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Connect'}
-            </button>
           </div>
         ) : (
           <>

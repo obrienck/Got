@@ -3,7 +3,7 @@ import { readdir } from 'fs/promises'
 import { homedir } from 'os'
 import { join, posix } from 'path'
 import type { RepoLocation } from '../shared/repo-location'
-import { runRemote, shellQuote, trackHost } from './ssh'
+import { runRemote, shellQuote, trackWorkspace } from './ssh'
 
 export interface DirEntry {
   name: string
@@ -14,20 +14,20 @@ export interface DirEntry {
 
 export class Repository {
   private git: SimpleGit
-  /** Absolute repo root — on the remote machine for SSH repos. */
+  /** Absolute repo root — inside the workspace for Coder repos. */
   public path: string
-  /** Set for repos on a remote machine; every git call then runs over ssh. */
-  private sshHost: string | null
+  /** Set for repos in a Coder workspace; every git call then runs over ssh. */
+  private workspace: string | null
 
   constructor(location: RepoLocation, bundledGitPath?: string) {
     this.path = location.path
-    this.sshHost = location.kind === 'ssh' ? location.host : null
+    this.workspace = location.kind === 'coder' ? location.workspace : null
 
-    if (location.kind === 'ssh') {
-      trackHost(location.host)
+    if (location.kind === 'coder') {
+      trackWorkspace(location.workspace)
       // simple-git spawns our shim (Electron running as plain Node) as if it
-      // were git; the shim forwards argv over ssh to `git` in the remote repo.
-      // baseDir only needs to exist locally — the real cwd is GOT_SSH_CWD.
+      // were git; the shim forwards argv over ssh to `git` in the workspace.
+      // baseDir only needs to exist locally — the real cwd is GOT_REMOTE_CWD.
       this.git = simpleGit({
         baseDir: homedir(),
         binary: [process.execPath, join(__dirname, 'ssh-git-shim.js')],
@@ -39,8 +39,8 @@ export class Repository {
       this.git.env({
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        GOT_SSH_HOST: location.host,
-        GOT_SSH_CWD: location.path
+        GOT_CODER_WORKSPACE: location.workspace,
+        GOT_REMOTE_CWD: location.path
       })
       return
     }
@@ -160,8 +160,8 @@ export class Repository {
   /** Lists one directory's immediate children (lazy — callers fetch deeper
    *  levels on demand as folders are expanded), sorted directories-first. */
   async listDirectory(relativePath = ''): Promise<DirEntry[]> {
-    const entries = this.sshHost
-      ? await this.listRemoteDirectory(this.sshHost, relativePath)
+    const entries = this.workspace
+      ? await this.listRemoteDirectory(this.workspace, relativePath)
       : (await readdir(join(this.path, relativePath), { withFileTypes: true })).map((e) => ({
           name: e.name,
           isDirectory: e.isDirectory()
@@ -187,11 +187,11 @@ export class Repository {
 
   /** `ls -p` marks directories with a trailing slash. */
   private async listRemoteDirectory(
-    host: string,
+    workspace: string,
     relativePath: string
   ): Promise<{ name: string; isDirectory: boolean }[]> {
     const dirPath = posix.join(this.path, relativePath)
-    const output = await runRemote(host, `cd ${shellQuote(dirPath)} && ls -A1p`)
+    const output = await runRemote(workspace, `cd ${shellQuote(dirPath)} && ls -A1p`)
     return output
       .split('\n')
       .filter(Boolean)

@@ -214,14 +214,14 @@ export default function SynthWelcome({
               </div>
             </button>
 
-            {/* Open Remote (SSH) */}
+            {/* Open Coder Workspace */}
             <button
               onClick={() => setShowRemoteDialog(true)}
               disabled={isBusy}
               className="group relative flex flex-col items-center p-8 rounded-2xl bg-[#140420]/90 border-2 border-purple-400/60 transition-all duration-300 hover:scale-[1.03] neon-border-purple hover:bg-purple-950/70 text-left disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <div className="absolute top-3 right-3 text-[9px] font-bold text-purple-300 bg-purple-950/80 border border-purple-400/50 px-2 py-0.5 rounded tracking-widest">
-                UPLINK-SSH
+                UPLINK-CODER
               </div>
               <div className="mb-5 p-4 rounded-xl bg-purple-500/10 border border-purple-400/40 shadow-[0_0_15px_rgba(168,85,247,0.3)] group-hover:shadow-[0_0_25px_#a855f7] transition-all">
                 <Server className="h-9 w-9 text-purple-300" />
@@ -230,11 +230,11 @@ export default function SynthWelcome({
                 REMOTE UPLINK
               </span>
               <p className="mt-2 text-xs text-purple-300/70 text-center tracking-wide">
-                &gt; Work on a repository hosted on another machine
+                &gt; Work on a repository in a Coder workspace
               </p>
               <div className="mt-4 w-full bg-purple-950/50 border border-purple-400/30 rounded py-1 px-3 text-[10px] text-purple-300 text-center flex items-center justify-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" /> SSH CHANNEL
-                OPEN
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" /> CODER
+                CHANNEL OPEN
               </div>
             </button>
           </section>

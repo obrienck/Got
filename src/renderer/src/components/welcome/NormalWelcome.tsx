@@ -160,8 +160,10 @@ export default function NormalWelcome({
             className="group flex flex-col items-center gap-3 rounded-2xl border border-slate-700 bg-slate-800/40 p-6 text-center transition-all hover:border-indigo-500/50 hover:bg-slate-800/60 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Server className="h-8 w-8 text-indigo-400" />
-            <span className="text-sm font-semibold text-white">Open Remote (SSH)</span>
-            <span className="text-xs text-slate-500">Work on a repository on another machine</span>
+            <span className="text-sm font-semibold text-white">Open Coder Workspace</span>
+            <span className="text-xs text-slate-500">
+              Work on a repository in a Coder workspace
+            </span>
           </button>
         </div>
 

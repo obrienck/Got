@@ -1,22 +1,28 @@
 // src/shared/repo-location.ts
 // A repo is identified everywhere (IPC, query keys, recent list) by a single
-// string. Local repos are plain filesystem paths; remote repos are encoded as
-// `ssh://<urlencoded host>/<absolute remote path>`. Shared by main + renderer.
+// string. Local repos are plain filesystem paths; repos inside a Coder
+// workspace are encoded as `coder://<workspace>/<absolute path in workspace>`.
+// Shared by main + renderer.
 
 export type RepoLocation =
   | { kind: 'local'; path: string }
-  | { kind: 'ssh'; host: string; path: string }
+  | { kind: 'coder'; workspace: string; path: string }
 
-const SSH_PREFIX = 'ssh://'
+const CODER_PREFIX = 'coder://'
+
+/** Generic `ssh://host/path` locations saved by older versions of Got. */
+export function isLegacySshLocation(location: string): boolean {
+  return location.startsWith('ssh://')
+}
 
 export function parseRepoLocation(location: string): RepoLocation {
-  if (location.startsWith(SSH_PREFIX)) {
-    const rest = location.slice(SSH_PREFIX.length)
+  if (location.startsWith(CODER_PREFIX)) {
+    const rest = location.slice(CODER_PREFIX.length)
     const slash = rest.indexOf('/')
     if (slash > 0) {
       return {
-        kind: 'ssh',
-        host: decodeURIComponent(rest.slice(0, slash)),
+        kind: 'coder',
+        workspace: decodeURIComponent(rest.slice(0, slash)),
         path: rest.slice(slash)
       }
     }
@@ -24,8 +30,8 @@ export function parseRepoLocation(location: string): RepoLocation {
   return { kind: 'local', path: location }
 }
 
-export function formatSshLocation(host: string, path: string): string {
-  return `${SSH_PREFIX}${encodeURIComponent(host)}${path.startsWith('/') ? path : `/${path}`}`
+export function formatCoderLocation(workspace: string, path: string): string {
+  return `${CODER_PREFIX}${encodeURIComponent(workspace)}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 /** Last path segment — the repo's folder name. */
@@ -34,8 +40,8 @@ export function repoDisplayName(location: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() || path
 }
 
-/** The SSH host for a remote repo, or null for a local one. */
+/** The Coder workspace for a remote repo, or null for a local one. */
 export function repoHostLabel(location: string): string | null {
   const loc = parseRepoLocation(location)
-  return loc.kind === 'ssh' ? loc.host : null
+  return loc.kind === 'coder' ? loc.workspace : null
 }

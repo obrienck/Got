@@ -27,6 +27,11 @@ power. Built with Electron, React, TypeScript, and Tailwind CSS.
   per-file diffs in both **Unified** and **Split** (side-by-side) view.
 - **Clone, init, or open** — pick up an existing repo, clone one from
   a URL, or start a brand new one, all from the same screen.
+- **Coder workspaces** — pick a workspace from your [Coder](https://coder.com)
+  deployment (starting it if it's stopped) and work on a repo inside it;
+  git runs in the workspace. Requires the `coder` CLI, signed in with
+  `coder login`, plus OpenSSH locally. Set `GOT_CODER_BIN` if `coder`
+  isn't on the PATH Got is launched with.
 - **Cross-platform** — packaged for macOS, Windows, and Linux.
 
 ## Install

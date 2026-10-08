@@ -1,12 +1,14 @@
 // src/main/ssh.ts
-// Thin wrapper around the system `ssh` binary. Using OpenSSH (rather than a JS
-// SSH client) means ~/.ssh/config, keys, ssh-agent, ProxyJump etc. all just
-// work. On macOS/Linux one multiplexed master connection per host is reused by
+// Thin wrapper around the system `ssh` binary for reaching Coder workspaces.
+// Each connection tunnels through `coder ssh --stdio <workspace>` (the same
+// ProxyCommand `coder config-ssh` writes), so it works whether or not the user
+// ran config-ssh, and auth comes from the Coder CLI's session — no SSH keys.
+// On macOS/Linux one multiplexed master connection per workspace is reused by
 // every git call; Windows OpenSSH has no ControlMaster support.
 
 import { spawn, spawnSync } from 'child_process'
-import { mkdirSync, readFileSync } from 'fs'
-import { homedir, tmpdir, userInfo } from 'os'
+import { mkdirSync } from 'fs'
+import { tmpdir, userInfo } from 'os'
 import { join } from 'path'
 
 const SUPPORTS_MULTIPLEXING = process.platform !== 'win32'
@@ -14,25 +16,58 @@ const SUPPORTS_MULTIPLEXING = process.platform !== 'win32'
 // Kept short: unix socket paths are limited to ~104 chars, and %C adds 40.
 const CONTROL_DIR = join(tmpdir(), `got-ssh-${userInfo().uid}`)
 
-const usedHosts = new Set<string>()
+const usedWorkspaces = new Set<string>()
+
+/** The Coder CLI. GOT_CODER_BIN overrides it, e.g. when a GUI launch doesn't
+ *  inherit the shell PATH that `coder` was installed on. */
+export function coderBinary(): string {
+  return process.env.GOT_CODER_BIN || 'coder'
+}
 
 /** POSIX single-quote escaping, safe for any byte sequence except NUL. */
 export function shellQuote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`
 }
 
-/** Rejects anything ssh could interpret as an option, or that isn't one token. */
-export function validateHost(host: string): string {
-  const trimmed = host.trim()
-  if (!trimmed || trimmed.startsWith('-') || /\s/.test(trimmed)) {
-    throw new Error(`Invalid SSH host: "${host}"`)
+/** Coder workspace names, optionally suffixed with `.<agent>`. The strict
+ *  charset also keeps them safe inside ProxyCommand and as an ssh host. */
+export function validateWorkspace(workspace: string): string {
+  const trimmed = workspace.trim()
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9][A-Za-z0-9_-]*)?$/.test(trimmed)) {
+    throw new Error(`Invalid Coder workspace: "${workspace}"`)
   }
   return trimmed
 }
 
-/** Options common to every ssh invocation. Non-interactive (keys/agent only). */
-export function sshBaseArgs(): string[] {
-  const args = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
+/** Host alias ssh sees; matches the naming `coder config-ssh` uses. */
+function sshAlias(workspace: string): string {
+  return `coder.${workspace}`
+}
+
+function proxyCommand(workspace: string): string {
+  const bin = coderBinary().replace(/%/g, '%%') // ssh expands %-tokens
+  const quotedBin = /\s/.test(bin) ? `"${bin}"` : bin
+  return `${quotedBin} ssh --stdio ${workspace}`
+}
+
+/** Options for every ssh invocation to `workspace`. Non-interactive. The
+ *  Coder tunnel is already authenticated, so workspace host keys (which
+ *  change on every rebuild) aren't pinned — the same as `coder config-ssh`. */
+function sshBaseArgs(workspace: string): string[] {
+  const args = [
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    'ConnectTimeout=30',
+    '-o',
+    `ProxyCommand=${proxyCommand(workspace)}`,
+    '-o',
+    'StrictHostKeyChecking=no',
+    '-o',
+    'UserKnownHostsFile=/dev/null',
+    '-o',
+    'LogLevel=ERROR'
+  ]
   if (SUPPORTS_MULTIPLEXING) {
     mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 })
     args.push(
@@ -47,17 +82,17 @@ export function sshBaseArgs(): string[] {
   return args
 }
 
-/** Remembers a host so its master connection is closed on quit. Needed for
- *  hosts only reached via the git shim, which runs in its own process. */
-export function trackHost(host: string): void {
-  usedHosts.add(validateHost(host))
+/** Remembers a workspace so its master connection is closed on quit. Needed
+ *  for workspaces only reached via the git shim, which runs in its own process. */
+export function trackWorkspace(workspace: string): void {
+  usedWorkspaces.add(validateWorkspace(workspace))
 }
 
-/** Full argv (minus the `ssh` binary) to run a shell command on `host`. */
-export function sshCommandArgs(host: string, remoteCommand: string): string[] {
-  const safeHost = validateHost(host)
-  usedHosts.add(safeHost)
-  return [...sshBaseArgs(), '--', safeHost, remoteCommand]
+/** Full argv (minus the `ssh` binary) to run a shell command in `workspace`. */
+export function sshCommandArgs(workspace: string, remoteCommand: string): string[] {
+  const safe = validateWorkspace(workspace)
+  usedWorkspaces.add(safe)
+  return [...sshBaseArgs(safe), '--', sshAlias(safe), remoteCommand]
 }
 
 /** Remote command that runs git in `cwd` without ever prompting. `env` keeps
@@ -66,10 +101,27 @@ export function remoteGitCommand(cwd: string, gitArgs: string[]): string {
   return `cd ${shellQuote(cwd)} && env GIT_TERMINAL_PROMPT=0 git ${gitArgs.map(shellQuote).join(' ')}`
 }
 
-/** Runs a shell command on the remote host and resolves with its stdout. */
-export function runRemote(host: string, remoteCommand: string): Promise<string> {
+/** ssh exits 255 on connection failures, but once ControlPersist backgrounds
+ *  the master the ProxyCommand's stderr — where `coder` explains what's wrong
+ *  (not logged in, workspace stopped, ...) — is lost. Re-run the proxy on its
+ *  own to recover that message; resolves null if it has nothing to say. */
+export function diagnoseConnectionFailure(workspace: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(coderBinary(), ['ssh', '--stdio', validateWorkspace(workspace)], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+      timeout: 15_000
+    })
+    let stderr = ''
+    child.stderr.on('data', (d) => (stderr += d))
+    child.on('error', (err) => resolve(`coder: command not found (${err.message})`))
+    child.on('close', (code) => resolve(code !== 0 && stderr.trim() ? stderr.trim() : null))
+  })
+}
+
+/** Runs a shell command in the workspace and resolves with its stdout. */
+export function runRemote(workspace: string, remoteCommand: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('ssh', sshCommandArgs(host, remoteCommand), {
+    const child = spawn('ssh', sshCommandArgs(workspace, remoteCommand), {
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let stdout = ''
@@ -79,67 +131,60 @@ export function runRemote(host: string, remoteCommand: string): Promise<string> 
     child.on('error', (err) =>
       reject(new Error(`Could not run ssh — is OpenSSH installed? (${err.message})`))
     )
-    child.on('close', (code) => {
-      if (code === 0) resolve(stdout)
-      else reject(new Error(stderr.trim() || `ssh exited with code ${code}`))
+    child.on('close', async (code) => {
+      if (code === 0) return resolve(stdout)
+      const diagnosis =
+        code === 255 && !stderr.trim() && (await diagnoseConnectionFailure(workspace))
+      reject(new Error(diagnosis || stderr.trim() || `ssh exited with code ${code}`))
     })
   })
 }
 
-/** Turns raw ssh/shell stderr into something a user can act on. */
-export function friendlySshError(host: string, err: unknown): string {
+/** Turns raw coder/ssh/shell stderr into something a user can act on. */
+export function friendlyCoderError(workspace: string, err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
-  if (/permission denied/i.test(msg)) {
-    return `Authentication to ${host} failed. Got only supports key-based auth — add your key to ssh-agent or ~/.ssh/config.`
+  if (
+    /(coder|exec): (command )?not found|command not found: coder|no such file.*coder/i.test(msg)
+  ) {
+    return 'The Coder CLI was not found. Install `coder` and make sure it is on your PATH (or set GOT_CODER_BIN).'
   }
-  if (/host key verification failed/i.test(msg)) {
-    return `Host key for ${host} is not trusted yet. Connect once with \`ssh ${host}\` in a terminal to accept it.`
+  if (/not logged in|coder login|session token|unauthorized|401/i.test(msg)) {
+    return 'You are not logged in to Coder. Run `coder login <your Coder URL>` in a terminal, then try again.'
   }
-  if (/could not resolve hostname/i.test(msg)) {
-    return `Unknown host "${host}".`
+  if (
+    /not running|is stopped|must be started|workspace is (stopped|starting|stopping)/i.test(msg)
+  ) {
+    return `Workspace "${workspace}" is not running. Start it and try again.`
   }
-  if (/connection refused|timed out|no route to host|network is unreachable/i.test(msg)) {
-    return `Can't reach ${host}: ${msg}`
+  if (/multiple agents/i.test(msg)) {
+    return `Workspace "${workspace}" has several agents — pick a specific one from the list.`
   }
   if (/git: (command )?not found/i.test(msg)) {
-    return `Git is not installed on ${host}.`
+    return `Git is not installed in workspace "${workspace}".`
+  }
+  if (/workspace.*not found|404/i.test(msg)) {
+    return `Coder workspace "${workspace}" was not found.`
+  }
+  if (/connection (closed|refused|reset)|timed out|kex_exchange_identification/i.test(msg)) {
+    return `Can't reach workspace "${workspace}": ${msg}`
   }
   return msg
 }
 
-/** Opens (or reuses) the connection and verifies git exists remotely. */
-export async function checkConnection(host: string): Promise<void> {
+/** Opens (or reuses) the connection and verifies git exists in the workspace. */
+export async function checkConnection(workspace: string): Promise<void> {
   try {
-    await runRemote(host, 'git --version')
+    await runRemote(workspace, 'git --version')
   } catch (err) {
-    throw new Error(friendlySshError(host, err))
+    throw new Error(friendlyCoderError(workspace, err))
   }
-}
-
-/** Concrete `Host` aliases from ~/.ssh/config (wildcard patterns skipped). */
-export function listSshConfigHosts(): string[] {
-  let config: string
-  try {
-    config = readFileSync(join(homedir(), '.ssh', 'config'), 'utf8')
-  } catch {
-    return []
-  }
-  const hosts = new Set<string>()
-  for (const line of config.split(/\r?\n/)) {
-    const match = line.match(/^\s*Host\s+(.+)$/i)
-    if (!match) continue
-    for (const name of match[1].split(/\s+/)) {
-      if (name && !/[*?!]/.test(name)) hosts.add(name)
-    }
-  }
-  return [...hosts]
 }
 
 /** Tears down any master connections we started, so nothing lingers after quit. */
 export function closeAllMasters(): void {
   if (!SUPPORTS_MULTIPLEXING) return
-  for (const host of usedHosts) {
-    spawnSync('ssh', [...sshBaseArgs(), '-O', 'exit', '--', host], {
+  for (const workspace of usedWorkspaces) {
+    spawnSync('ssh', [...sshBaseArgs(workspace), '-O', 'exit', '--', sshAlias(workspace)], {
       stdio: 'ignore',
       timeout: 2000
     })

@@ -7,14 +7,34 @@
 // every git call; Windows OpenSSH has no ControlMaster support.
 
 import { spawn, spawnSync } from 'child_process'
-import { mkdirSync } from 'fs'
-import { tmpdir, userInfo } from 'os'
+import { lstatSync, mkdirSync } from 'fs'
+import { userInfo } from 'os'
 import { join } from 'path'
 
 const SUPPORTS_MULTIPLEXING = process.platform !== 'win32'
 
-// Kept short: unix socket paths are limited to ~104 chars, and %C adds 40.
-const CONTROL_DIR = join(tmpdir(), `got-ssh-${userInfo().uid}`)
+// Unix socket paths are limited to 104 chars on macOS; %C adds 40 and ssh
+// appends a ~17-char temp suffix while creating the socket. os.tmpdir() is far
+// too long there (/var/folders/xx/.../T/), so use /tmp directly.
+const CONTROL_DIR = `/tmp/got-ssh-${userInfo().uid}`
+
+let controlDirOk: boolean | undefined
+
+/** /tmp is shared, so only use the socket dir if it is a real directory that
+ *  we own and nobody else can enter; otherwise skip multiplexing. */
+function canMultiplex(): boolean {
+  if (!SUPPORTS_MULTIPLEXING) return false
+  if (controlDirOk === undefined) {
+    try {
+      mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 })
+      const st = lstatSync(CONTROL_DIR)
+      controlDirOk = st.isDirectory() && st.uid === userInfo().uid && (st.mode & 0o077) === 0
+    } catch {
+      controlDirOk = false
+    }
+  }
+  return controlDirOk
+}
 
 const usedWorkspaces = new Set<string>()
 
@@ -68,8 +88,7 @@ function sshBaseArgs(workspace: string): string[] {
     '-o',
     'LogLevel=ERROR'
   ]
-  if (SUPPORTS_MULTIPLEXING) {
-    mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 })
+  if (canMultiplex()) {
     args.push(
       '-o',
       'ControlMaster=auto',
@@ -182,7 +201,7 @@ export async function checkConnection(workspace: string): Promise<void> {
 
 /** Tears down any master connections we started, so nothing lingers after quit. */
 export function closeAllMasters(): void {
-  if (!SUPPORTS_MULTIPLEXING) return
+  if (!canMultiplex()) return
   for (const workspace of usedWorkspaces) {
     spawnSync('ssh', [...sshBaseArgs(workspace), '-O', 'exit', '--', sshAlias(workspace)], {
       stdio: 'ignore',

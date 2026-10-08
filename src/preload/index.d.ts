@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { CoderWorkspace } from '../shared/coder-workspace'
 
 declare global {
   interface Window {
@@ -14,11 +15,12 @@ declare global {
       getRecentRepos: () => Promise<string[]>
       getLastRepoPath: () => Promise<string | null>
 
-      // Remote (SSH) repositories — opened repos use `ssh://host/path` as repoPath
-      getRemoteHosts: () => Promise<string[]>
-      connectRemote: (host: string) => Promise<{ ok: true } | { error: string }>
+      // Coder workspace repositories — opened repos use `coder://workspace/path` as repoPath
+      getCoderWorkspaces: () => Promise<{ workspaces: CoderWorkspace[] } | { error: string }>
+      startCoderWorkspace: (workspace: string) => Promise<{ ok: true } | { error: string }>
+      connectRemote: (workspace: string) => Promise<{ ok: true } | { error: string }>
       listRemoteDirectory: (
-        host: string,
+        workspace: string,
         path?: string
       ) => Promise<
         | {
@@ -28,7 +30,7 @@ declare global {
         | { error: string }
       >
       openRemoteRepository: (
-        host: string,
+        workspace: string,
         path: string
       ) => Promise<{ path: string } | { error: string; path: string }>
 

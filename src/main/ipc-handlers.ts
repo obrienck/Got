@@ -6,8 +6,9 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import StoreModule from 'electron-store'
 import { repoManager } from './repo-manager'
-import { formatSshLocation } from '../shared/repo-location'
-import { checkConnection, friendlySshError, listSshConfigHosts, runRemote, shellQuote } from './ssh'
+import { formatCoderLocation, isLegacySshLocation } from '../shared/repo-location'
+import { checkConnection, friendlyCoderError, runRemote, shellQuote } from './ssh'
+import { listWorkspaces, startWorkspace } from './coder'
 
 // Handle ESM/CJS interop — electron-store v11 is ESM-only
 const Store = (StoreModule as any).default || StoreModule
@@ -16,8 +17,7 @@ const Store = (StoreModule as any).default || StoreModule
 const store = new Store({
   defaults: {
     lastRepoPath: null as string | null,
-    recentRepos: [] as string[],
-    recentHosts: [] as string[]
+    recentRepos: [] as string[]
   }
 })
 
@@ -31,12 +31,6 @@ function persistRepoPath(repoPath: string): void {
   const filtered = recent.filter((p) => p !== repoPath)
   const updated = [repoPath, ...filtered].slice(0, 5)
   store.set('recentRepos', updated)
-}
-
-/** Most-recent-first, unique, max 10 — mirrors persistRepoPath. */
-function persistRecentHost(host: string): void {
-  const recent = store.get('recentHosts', []).filter((h) => h !== host)
-  store.set('recentHosts', [host, ...recent].slice(0, 10))
 }
 
 /** Derives a folder name from a clone URL, e.g. "https://host/user/repo.git" -> "repo". */
@@ -136,41 +130,54 @@ export function setupIpcHandlers(): void {
     return { path: targetPath }
   })
 
+  // Generic SSH repos from older versions can no longer be opened — hide them
   ipcMain.handle('git:getRecentRepos', async () => {
-    return store.get('recentRepos', [])
+    return store.get('recentRepos', []).filter((p) => !isLegacySshLocation(p))
   })
 
   ipcMain.handle('git:getLastRepoPath', async () => {
-    return store.get('lastRepoPath', null)
+    const last = store.get('lastRepoPath', null)
+    return last && isLegacySshLocation(last) ? null : last
   })
 
-  // --- Remote (SSH) repositories ---
+  // --- Coder workspace repositories ---
 
-  ipcMain.handle('remote:getHosts', async () => {
-    const recent: string[] = store.get('recentHosts', [])
-    return [...new Set([...recent, ...listSshConfigHosts()])]
-  })
-
-  ipcMain.handle('remote:connect', async (_, host: string) => {
+  ipcMain.handle('remote:listWorkspaces', async () => {
     try {
-      await checkConnection(host)
+      return { workspaces: await listWorkspaces() }
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) }
     }
-    persistRecentHost(host.trim())
+  })
+
+  ipcMain.handle('remote:startWorkspace', async (_, workspace: string) => {
+    try {
+      await startWorkspace(workspace)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('remote:connect', async (_, workspace: string) => {
+    try {
+      await checkConnection(workspace)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
     return { ok: true }
   })
 
   // One round-trip: resolve the directory, list it, and flag which child
   // folders are git repos. Output sections are separated by a marker line.
-  ipcMain.handle('remote:listDirectory', async (_, host: string, dirPath?: string) => {
+  ipcMain.handle('remote:listDirectory', async (_, workspace: string, dirPath?: string) => {
     const cdCmd = dirPath ? `cd ${shellQuote(dirPath)}` : 'cd'
     const cmd = `${cdCmd} && pwd && echo ::got:: && ls -A1p && echo ::got:: && for d in */ .*/; do [ -e "$d.git" ] && echo "$d"; done; true`
     let output: string
     try {
-      output = await runRemote(host, cmd)
+      output = await runRemote(workspace, cmd)
     } catch (err) {
-      return { error: friendlySshError(host, err) }
+      return { error: friendlyCoderError(workspace, err) }
     }
     const [pwdPart = '', lsPart = '', reposPart = ''] = output.split('::got::\n')
     const repos = new Set(reposPart.split('\n').filter(Boolean))
@@ -192,19 +199,19 @@ export function setupIpcHandlers(): void {
     return { path: pwdPart.trim(), entries }
   })
 
-  ipcMain.handle('remote:openRepository', async (_, host: string, repoPath: string) => {
+  ipcMain.handle('remote:openRepository', async (_, workspace: string, repoPath: string) => {
     let toplevel: string
     try {
       toplevel = (
-        await runRemote(host, `git -C ${shellQuote(repoPath)} rev-parse --show-toplevel`)
+        await runRemote(workspace, `git -C ${shellQuote(repoPath)} rev-parse --show-toplevel`)
       ).trim()
     } catch (err) {
-      const message = friendlySshError(host, err)
+      const message = friendlyCoderError(workspace, err)
       return /not a git repository/i.test(message)
         ? { error: 'NOT_A_GIT_REPO', path: repoPath }
         : { error: message, path: repoPath }
     }
-    const location = formatSshLocation(host.trim(), toplevel)
+    const location = formatCoderLocation(workspace.trim(), toplevel)
     persistRepoPath(location)
     return { path: location }
   })

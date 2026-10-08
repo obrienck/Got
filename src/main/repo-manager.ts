@@ -4,7 +4,7 @@ import { parseRepoLocation } from '../shared/repo-location'
 export class RepoManager {
   private repos = new Map<string, Repository>()
 
-  /** `location` is a local path or an `ssh://host/path` string (see repo-location). */
+  /** `location` is a local path or a `coder://workspace/path` string (see repo-location). */
   getRepo(location: string): Repository {
     if (!this.repos.has(location)) {
       this.repos.set(location, new Repository(parseRepoLocation(location)))

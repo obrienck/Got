@@ -80,7 +80,7 @@ app.on('window-all-closed', () => {
   }
 })
 
-// Close the multiplexed ssh connections opened for remote repos
+// Close the multiplexed ssh connections opened for Coder workspace repos
 app.on('will-quit', closeAllMasters)
 
 // In this file you can include the rest of your app's specific main process

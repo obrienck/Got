@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { setupIpcHandlers } from './ipc-handlers'
 import { closeAllMasters } from './ssh'
+import { resolveShellEnv } from './shell-env'
 import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
@@ -47,6 +48,11 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Must happen before any git/ssh subprocess is spawned (createWindow can
+  // trigger one almost immediately via the last-opened repo) — see
+  // shell-env.ts for why this is needed at all.
+  resolveShellEnv()
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.obrienck.got')
 
